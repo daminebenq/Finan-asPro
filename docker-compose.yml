@@ -1,0 +1,9 @@
+services:
+  finbr-admin:
+    container_name: finbr-admin
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "43991:80"

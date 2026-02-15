@@ -243,9 +243,43 @@ const Dashboard: React.FC = () => {
 
   const validateDiscount = async () => {
     if (!discountCode || !selectedPlan) return;
-    const { data } = await supabase.functions.invoke('admin-setup', {
-      body: { action: 'validate-discount', code: discountCode, plan: selectedPlan }
-    });
+    let data: any = null;
+    try {
+      const res = await supabase.functions.invoke('admin-setup', {
+        body: { action: 'validate-discount', code: discountCode, plan: selectedPlan }
+      });
+      data = res.data;
+    } catch {
+      const code = discountCode.trim().toUpperCase();
+      const now = new Date().toISOString();
+      const { data: codeData } = await supabase
+        .from('discount_codes')
+        .select('*')
+        .eq('code', code)
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle();
+
+      if (!codeData) {
+        data = { success: false, message: 'Cupom não encontrado.' };
+      } else {
+        const expired = codeData.valid_until && codeData.valid_until < now;
+        const maxReached = codeData.max_uses >= 0 && (codeData.current_uses || 0) >= codeData.max_uses;
+        if (expired || maxReached) {
+          data = { success: false, message: expired ? 'Cupom expirado.' : 'Cupom sem usos disponíveis.' };
+        } else {
+          data = {
+            success: true,
+            discount: {
+              code: codeData.code,
+              type: codeData.discount_type,
+              value: Number(codeData.discount_value) || 0,
+              description: codeData.description || `Cupom ${codeData.code}`,
+            },
+          };
+        }
+      }
+    }
     if (data?.success) {
       setDiscountInfo(data.discount);
       toast({ title: 'Cupom aplicado!', description: data.discount.description });

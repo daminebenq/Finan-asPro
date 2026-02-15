@@ -84,33 +84,79 @@ const AdminPanel: React.FC = () => {
     has_reports: true,
   });
 
+  const invokeAdmin = useCallback(async <T,>(body: Record<string, any>, fallback: () => Promise<T>): Promise<T> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-setup', { body });
+      if (error) throw error;
+      return data as T;
+    } catch {
+      return fallback();
+    }
+  }, []);
+
   const fetchAdminData = useCallback(async () => {
     setLoading(true);
     try {
-      const [usersRes, requestsRes, codesRes, promosRes] = await Promise.all([
-        supabase.functions.invoke('admin-setup', { body: { action: 'get-all-users' } }),
-        supabase.functions.invoke('admin-setup', { body: { action: 'get-pending-requests' } }),
-        supabase.functions.invoke('admin-setup', { body: { action: 'get-discount-codes' } }),
-        supabase.functions.invoke('admin-setup', { body: { action: 'get-promotions-admin' } }),
+      const [usersData, requestsData, codesData, promosData] = await Promise.all([
+        invokeAdmin<{ users: UserProfile[] }>(
+          { action: 'get-all-users' },
+          async () => {
+            const { data } = await supabase.from('user_profiles').select('*').order('created_at', { ascending: false });
+            return { users: (data || []) as UserProfile[] };
+          }
+        ),
+        invokeAdmin<{ requests: PlanRequest[] }>(
+          { action: 'get-pending-requests' },
+          async () => {
+            const { data } = await supabase.from('plan_requests').select('*').order('created_at', { ascending: false });
+            return { requests: (data || []) as PlanRequest[] };
+          }
+        ),
+        invokeAdmin<{ codes: DiscountCode[] }>(
+          { action: 'get-discount-codes' },
+          async () => {
+            const { data } = await supabase.from('discount_codes').select('*').order('created_at', { ascending: false });
+            return { codes: (data || []) as DiscountCode[] };
+          }
+        ),
+        invokeAdmin<{ promotions: Promotion[] }>(
+          { action: 'get-promotions-admin' },
+          async () => {
+            const { data } = await supabase.from('promotions').select('*').order('created_at', { ascending: false });
+            return { promotions: (data || []) as Promotion[] };
+          }
+        ),
       ]);
       const { data: plansData } = await supabase.from('plans').select('*').order('price_monthly', { ascending: true });
-      if (usersRes.data?.users) setUsers(usersRes.data.users);
-      if (requestsRes.data?.requests) setRequests(requestsRes.data.requests);
-      if (codesRes.data?.codes) setDiscountCodes(codesRes.data.codes);
-      if (promosRes.data?.promotions) setPromotions(promosRes.data.promotions);
+      if (usersData?.users) setUsers(usersData.users);
+      if (requestsData?.requests) setRequests(requestsData.requests);
+      if (codesData?.codes) setDiscountCodes(codesData.codes);
+      if (promosData?.promotions) setPromotions(promosData.promotions);
       if (plansData) setAdminPlans(plansData as AdminPlan[]);
     } catch (err) {
       console.error(err);
     }
     setLoading(false);
-  }, []);
+  }, [invokeAdmin]);
 
   useEffect(() => { fetchAdminData(); }, [fetchAdminData]);
 
   const handleApproveRequest = async (requestId: string, approved: boolean) => {
-    await supabase.functions.invoke('admin-setup', {
-      body: { action: 'approve-plan', requestId, approved, adminNotes }
-    });
+    await invokeAdmin(
+      { action: 'approve-plan', requestId, approved, adminNotes },
+      async () => {
+        const status = approved ? 'approved' : 'rejected';
+        const { data: reqData } = await supabase.from('plan_requests').select('*').eq('id', requestId).single();
+        await supabase.from('plan_requests').update({ status, admin_notes: adminNotes || null }).eq('id', requestId);
+        if (approved && reqData?.user_id && reqData?.requested_plan) {
+          await supabase
+            .from('user_profiles')
+            .update({ current_plan: reqData.requested_plan, plan_status: 'active' })
+            .eq('user_id', reqData.user_id);
+        }
+        return { success: true };
+      }
+    );
     toast({ title: approved ? 'Plano aprovado!' : 'Solicitação rejeitada' });
     setAdminNotes('');
     fetchAdminData();
@@ -118,15 +164,23 @@ const AdminPanel: React.FC = () => {
 
   const handleUpdateUser = async () => {
     if (!showEditUser) return;
-    await supabase.functions.invoke('admin-setup', {
-      body: {
+    await invokeAdmin(
+      {
         action: 'update-user-plan',
         userId: showEditUser.user_id,
         plan: editPlan || undefined,
         planStatus: editStatus || undefined,
         discount: editDiscount ? parseFloat(editDiscount) : undefined
+      },
+      async () => {
+        await supabase.from('user_profiles').update({
+          ...(editPlan ? { current_plan: editPlan } : {}),
+          ...(editStatus ? { plan_status: editStatus } : {}),
+          ...(editDiscount ? { discount_percentage: parseFloat(editDiscount) } : {}),
+        }).eq('user_id', showEditUser.user_id);
+        return { success: true };
       }
-    });
+    );
     toast({ title: 'Usuário atualizado!' });
     setShowEditUser(null);
     fetchAdminData();
@@ -134,8 +188,8 @@ const AdminPanel: React.FC = () => {
 
   const handleCreateCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { data } = await supabase.functions.invoke('admin-setup', {
-      body: {
+    const data = await invokeAdmin<{ success: boolean; error?: string }>(
+      {
         action: 'create-discount-code',
         code: codeForm.code,
         description: codeForm.description,
@@ -143,8 +197,21 @@ const AdminPanel: React.FC = () => {
         discountValue: parseFloat(codeForm.discountValue),
         maxUses: codeForm.maxUses ? parseInt(codeForm.maxUses) : -1,
         validUntil: codeForm.validUntil || null
+      },
+      async () => {
+        const { error } = await supabase.from('discount_codes').insert({
+          code: codeForm.code,
+          description: codeForm.description,
+          discount_type: codeForm.discountType,
+          discount_value: parseFloat(codeForm.discountValue),
+          max_uses: codeForm.maxUses ? parseInt(codeForm.maxUses) : -1,
+          valid_until: codeForm.validUntil || null,
+          is_active: true,
+          current_uses: 0,
+        });
+        return { success: !error, error: error?.message };
       }
-    });
+    );
     if (data?.success) {
       toast({ title: 'Código criado!' });
       setShowCreateCode(false);
@@ -157,8 +224,8 @@ const AdminPanel: React.FC = () => {
 
   const handleCreatePromo = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { data } = await supabase.functions.invoke('admin-setup', {
-      body: {
+    const data = await invokeAdmin<{ success: boolean; error?: string }>(
+      {
         action: 'create-promotion',
         title: promoForm.title,
         description: promoForm.description,
@@ -166,8 +233,21 @@ const AdminPanel: React.FC = () => {
         discountValue: parseFloat(promoForm.discountValue),
         startDate: promoForm.startDate || null,
         endDate: promoForm.endDate || null
+      },
+      async () => {
+        const { error } = await supabase.from('promotions').insert({
+          title: promoForm.title,
+          description: promoForm.description,
+          discount_type: promoForm.discountType,
+          discount_value: parseFloat(promoForm.discountValue),
+          start_date: promoForm.startDate || null,
+          end_date: promoForm.endDate || null,
+          is_active: true,
+          applicable_plans: [],
+        });
+        return { success: !error, error: error?.message };
       }
-    });
+    );
     if (data?.success) {
       toast({ title: 'Promoção criada!' });
       setShowCreatePromo(false);
@@ -177,12 +257,24 @@ const AdminPanel: React.FC = () => {
   };
 
   const toggleCode = async (codeId: string, isActive: boolean) => {
-    await supabase.functions.invoke('admin-setup', { body: { action: 'toggle-discount-code', codeId, isActive } });
+    await invokeAdmin(
+      { action: 'toggle-discount-code', codeId, isActive },
+      async () => {
+        await supabase.from('discount_codes').update({ is_active: isActive }).eq('id', codeId);
+        return { success: true };
+      }
+    );
     fetchAdminData();
   };
 
   const togglePromo = async (promoId: string, isActive: boolean) => {
-    await supabase.functions.invoke('admin-setup', { body: { action: 'toggle-promotion', promotionId: promoId, isActive } });
+    await invokeAdmin(
+      { action: 'toggle-promotion', promotionId: promoId, isActive },
+      async () => {
+        await supabase.from('promotions').update({ is_active: isActive }).eq('id', promoId);
+        return { success: true };
+      }
+    );
     fetchAdminData();
   };
 

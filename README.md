@@ -87,6 +87,27 @@ Optional env overrides:
 
 The script auto-selects the first free port from `VPS_PREFERRED_PORTS`, sets `HOST_PORT`, rebuilds, and starts the stack.
 
+### VPS-safe release management
+
+Two release scripts are included:
+
+- `scripts/promote_release_vps.sh` — promote a target commit/ref
+- `scripts/rollback_release_vps.sh` — rollback to previous promoted release
+
+Examples:
+
+- `scripts/promote_release_vps.sh`
+- `RELEASE_REF=origin/main scripts/promote_release_vps.sh`
+- `RELEASE_REF=<commit_sha> scripts/promote_release_vps.sh`
+- `scripts/rollback_release_vps.sh`
+
+Release metadata is stored on the VPS at:
+
+- `~/Finan-asPro/.release/current.env`
+- `~/Finan-asPro/.release/previous.env`
+
+Both scripts perform container rebuild/start and a localhost HTTP health check before marking the release state.
+
 ## Stack
 
 - React + TypeScript + Vite

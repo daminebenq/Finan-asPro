@@ -91,7 +91,16 @@ export HOST_PORT="\$FREE_PORT"
 \$COMPOSE_CMD up -d --build
 \$COMPOSE_CMD ps
 
-if ! curl -fsS "http://127.0.0.1:\$FREE_PORT" >/dev/null; then
+HEALTH_OK=0
+for i in \$(seq 1 20); do
+  if curl -fsS "http://127.0.0.1:\$FREE_PORT" >/dev/null; then
+    HEALTH_OK=1
+    break
+  fi
+  sleep 1
+done
+
+if [ "\$HEALTH_OK" -ne 1 ]; then
   echo "ERROR: health check failed after promote on port \$FREE_PORT"
   exit 1
 fi

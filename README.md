@@ -68,9 +68,9 @@ This repository includes:
 
 On your VPS:
 
-- `docker compose up -d --build`
+- `HOST_PORT=43991 docker compose up -d --build`
 
-The app is exposed on host port `43991` by default.
+The app is exposed on host port `43991` by default and can be changed with `HOST_PORT`.
 
 ## Stack
 

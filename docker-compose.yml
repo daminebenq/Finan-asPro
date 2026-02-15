@@ -6,4 +6,4 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "43991:80"
+      - "${HOST_PORT:-43991}:80"

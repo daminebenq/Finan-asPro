@@ -72,6 +72,21 @@ On your VPS:
 
 The app is exposed on host port `43991` by default and can be changed with `HOST_PORT`.
 
+### One-command remote deploy
+
+Use the helper script from your local machine:
+
+- `scripts/deploy_vps.sh`
+
+Optional env overrides:
+
+- `VPS_HOST` (default: `ubuntu@187.84.150.128`)
+- `VPS_APP_DIR` (default: `~/Finan-asPro`)
+- `VPS_BRANCH` (default: `main`)
+- `VPS_PREFERRED_PORTS` (space-separated candidate ports)
+
+The script auto-selects the first free port from `VPS_PREFERRED_PORTS`, sets `HOST_PORT`, rebuilds, and starts the stack.
+
 ## Stack
 
 - React + TypeScript + Vite

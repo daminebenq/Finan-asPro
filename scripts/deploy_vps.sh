@@ -8,7 +8,7 @@ set -euo pipefail
 #   VPS_APP_DIR=~/Finan-asPro VPS_PREFERRED_PORTS="43991 43992 44001" scripts/deploy_vps.sh
 
 VPS_HOST="${VPS_HOST:-ubuntu@187.84.150.128}"
-VPS_APP_DIR="${VPS_APP_DIR:-$HOME/Finan-asPro}"
+VPS_APP_DIR="${VPS_APP_DIR:-~/Finan-asPro}"
 VPS_REPO_URL="${VPS_REPO_URL:-https://github.com/daminebenq/Finan-asPro.git}"
 VPS_BRANCH="${VPS_BRANCH:-main}"
 VPS_PREFERRED_PORTS="${VPS_PREFERRED_PORTS:-43991 43992 43993 43994 43995 44001 44011 44021}"

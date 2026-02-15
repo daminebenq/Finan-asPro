@@ -22,8 +22,8 @@ PREFERRED_PORTS="$VPS_PREFERRED_PORTS"
 RELEASE_DIR_NAME=".release"
 
 case "\$APP_DIR" in
-  "~/"*) APP_DIR="\$HOME/\${APP_DIR#~/}" ;;
-  "~") APP_DIR="\$HOME" ;;
+  ~/*) APP_DIR="\$HOME/\${APP_DIR#~/}" ;;
+  ~) APP_DIR="\$HOME" ;;
 esac
 
 cd "\$APP_DIR"

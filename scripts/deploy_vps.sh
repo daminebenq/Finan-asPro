@@ -23,8 +23,8 @@ BRANCH="$VPS_BRANCH"
 PREFERRED_PORTS="$VPS_PREFERRED_PORTS"
 
 case "\$APP_DIR" in
-  "~/"*) APP_DIR="\$HOME/\${APP_DIR#~/}" ;;
-  "~") APP_DIR="\$HOME" ;;
+  ~/*) APP_DIR="\$HOME/\${APP_DIR#~/}" ;;
+  ~) APP_DIR="\$HOME" ;;
 esac
 
 if [ -d "\$APP_DIR/.git" ]; then

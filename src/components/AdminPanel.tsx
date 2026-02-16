@@ -142,9 +142,17 @@ const AdminPanel: React.FC = () => {
       const isRuntimeHeaderFailure = /req\.headers\.get is not a function/i.test(message);
 
       if (fallback && (isRuntimeHeaderFailure || /backend admin indisponível|falha backend|internal server error/i.test(message))) {
-        setBackendStatus('disconnected');
-        setBackendMessage('Função admin indisponível no runtime. Usando fallback parcial via banco para esta ação.');
-        return fallback();
+        try {
+          const result = await fallback();
+          setBackendStatus('connected');
+          setBackendMessage('');
+          return result;
+        } catch (fallbackError) {
+          const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : 'Falha no fallback administrativo.';
+          setBackendStatus('disconnected');
+          setBackendMessage(`Função admin indisponível no runtime. ${fallbackMessage}`);
+          throw fallbackError;
+        }
       }
 
       throw error;

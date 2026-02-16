@@ -1,5 +1,8 @@
-import React from 'react';
-import { BookText, ShieldCheck } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { BookText, Download, FileText, Save, ShieldCheck } from 'lucide-react';
+import { useAppContext } from '@/contexts/app-context';
+import { supabase } from '@/lib/supabase';
+import { toast } from '@/components/ui/use-toast';
 
 interface ComplianceRow {
   id: string;
@@ -10,6 +13,15 @@ interface ComplianceRow {
   periodicity: string;
   lastReviewed: string;
   notes: string;
+}
+
+interface ComplianceReview {
+  id: string;
+  entry_id: string;
+  reviewer_user_id: string;
+  reviewer_name: string;
+  review_note: string;
+  reviewed_at: string;
 }
 
 const complianceRows: ComplianceRow[] = [
@@ -86,17 +98,144 @@ const complianceRows: ComplianceRow[] = [
 ];
 
 const ComplianceMatrix: React.FC = () => {
+  const { user, profile } = useAppContext();
+  const [reviewsByEntry, setReviewsByEntry] = useState<Record<string, ComplianceReview>>({});
+  const [selectedEntry, setSelectedEntry] = useState(complianceRows[0]?.id || '');
+  const [reviewNote, setReviewNote] = useState('');
+  const [savingReview, setSavingReview] = useState(false);
+
+  const isAdmin = profile?.role === 'admin' || profile?.email?.toLowerCase() === 'damineone@gmail.com';
+
+  const rowsWithAudit = useMemo(() => {
+    return complianceRows.map((row) => {
+      const audit = reviewsByEntry[row.id];
+      return {
+        ...row,
+        lastReviewed: audit?.reviewed_at ? new Date(audit.reviewed_at).toISOString().slice(0, 10) : row.lastReviewed,
+        reviewedBy: audit?.reviewer_name || 'N/D',
+        reviewNote: audit?.review_note || row.notes,
+      };
+    });
+  }, [reviewsByEntry]);
+
+  const loadReviews = async () => {
+    const { data, error } = await supabase
+      .from('compliance_matrix_reviews')
+      .select('*')
+      .order('reviewed_at', { ascending: false });
+
+    if (error) {
+      return;
+    }
+
+    const latest: Record<string, ComplianceReview> = {};
+    (data as ComplianceReview[]).forEach((row) => {
+      if (!latest[row.entry_id]) latest[row.entry_id] = row;
+    });
+    setReviewsByEntry(latest);
+  };
+
+  useEffect(() => {
+    loadReviews();
+  }, []);
+
+  const exportCsv = () => {
+    const headers = 'Escopo,Tema,Base de Cálculo,Referência,Periodicidade,Última revisão,Última revisão por,Observações\n';
+    const rows = rowsWithAudit
+      .map((row) =>
+        [
+          row.scope,
+          row.topic,
+          row.formulaBase,
+          row.legalReference,
+          row.periodicity,
+          row.lastReviewed,
+          row.reviewedBy,
+          row.reviewNote,
+        ]
+          .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+          .join(',')
+      )
+      .join('\n');
+
+    const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `compliance_matrix_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPdf = () => {
+    window.print();
+  };
+
+  const saveReview = async () => {
+    if (!user || !selectedEntry) return;
+    setSavingReview(true);
+    const payload = {
+      entry_id: selectedEntry,
+      reviewer_user_id: user.id,
+      reviewer_name: profile?.full_name || profile?.email || 'Admin',
+      review_note: reviewNote.trim() || null,
+      reviewed_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('compliance_matrix_reviews').insert(payload);
+    setSavingReview(false);
+
+    if (error) {
+      toast({ title: 'Erro ao salvar revisão', description: error.message, variant: 'destructive' });
+      return;
+    }
+
+    toast({ title: 'Revisão registrada' });
+    setReviewNote('');
+    loadReviews();
+  };
+
   return (
     <div className="space-y-5">
       <div className="bg-white rounded-xl border border-gray-100 p-5">
-        <div className="flex items-center gap-2 mb-2">
-          <ShieldCheck size={18} className="text-emerald-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Matriz de Conformidade PF/PJ</h3>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+          <div className="flex items-center gap-2">
+            <ShieldCheck size={18} className="text-emerald-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Matriz de Conformidade PF/PJ</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={exportCsv} className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 inline-flex items-center gap-2">
+              <Download size={14} /> Exportar CSV
+            </button>
+            <button onClick={exportPdf} className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 inline-flex items-center gap-2">
+              <FileText size={14} /> Exportar PDF
+            </button>
+          </div>
         </div>
         <p className="text-sm text-gray-500">
           Mapeamento entre calculadoras do sistema, base de fórmula e referência legal/fiscal. Esta matriz serve para governança técnica e revisão periódica.
         </p>
       </div>
+
+      {isAdmin && (
+        <div className="bg-white rounded-xl border border-gray-100 p-4 grid md:grid-cols-4 gap-3 items-end">
+          <div className="md:col-span-2">
+            <label className="block text-xs text-gray-500 mb-1">Entrada da matriz</label>
+            <select value={selectedEntry} onChange={(e) => setSelectedEntry(e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm">
+              {complianceRows.map((row) => (
+                <option key={row.id} value={row.id}>{row.topic}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Observação de revisão</label>
+            <input value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} placeholder="Ex.: conferido com atualização oficial" className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm" />
+          </div>
+          <button onClick={saveReview} disabled={savingReview} className="px-3 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-60 inline-flex items-center justify-center gap-2">
+            <Save size={14} /> {savingReview ? 'Salvando...' : 'Salvar revisão'}
+          </button>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-100 overflow-x-auto">
         <table className="w-full min-w-[980px]">
@@ -108,11 +247,12 @@ const ComplianceMatrix: React.FC = () => {
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Referência</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Periodicidade</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Última revisão</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Revisado por</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Observações</th>
             </tr>
           </thead>
           <tbody>
-            {complianceRows.map((row) => (
+            {rowsWithAudit.map((row) => (
               <tr key={row.id} className="border-t border-gray-50 align-top">
                 <td className="px-4 py-3">
                   <span className={`inline-flex px-2 py-1 rounded-md text-xs font-semibold ${row.scope === 'PF' ? 'bg-blue-100 text-blue-700' : row.scope === 'PJ' ? 'bg-purple-100 text-purple-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -124,7 +264,8 @@ const ComplianceMatrix: React.FC = () => {
                 <td className="px-4 py-3 text-sm text-gray-600">{row.legalReference}</td>
                 <td className="px-4 py-3 text-sm text-gray-600">{row.periodicity}</td>
                 <td className="px-4 py-3 text-sm text-gray-600">{row.lastReviewed}</td>
-                <td className="px-4 py-3 text-sm text-gray-500">{row.notes}</td>
+                <td className="px-4 py-3 text-sm text-gray-600">{row.reviewedBy}</td>
+                <td className="px-4 py-3 text-sm text-gray-500">{row.reviewNote}</td>
               </tr>
             ))}
           </tbody>

@@ -158,3 +158,9 @@ O dashboard inclui a aba `Conformidade`, com matriz de mapeamento entre:
 - data de última revisão
 
 Objetivo: governança técnica e auditoria funcional dos cálculos PF/PJ.
+
+Para habilitar trilha de auditoria de revisões (campo "revisado por" + observações), execute:
+
+- `database/compliance_matrix_reviews_setup.sql`
+
+Após isso, admins podem registrar revisões na aba `Conformidade`, e exportar matriz em CSV/PDF.

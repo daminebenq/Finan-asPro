@@ -160,7 +160,7 @@ const SetupAssistant: React.FC = () => {
       <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
         <h4 className="text-sm font-semibold text-indigo-900 mb-2">Runbook de correção</h4>
         <ul className="text-xs text-indigo-800 space-y-1 list-disc pl-4">
-          <li>Subdatabase: execute `database/subdatabase_setup.sql` e `database/fix_subprojects_api_access.sql`.</li>
+          <li>Subdatabase: execute `database/subdatabase_setup.sql` e `database/fix_subprojects_api_access.sql` (ou o consolidado `database/subprojects_recovery.sql`).</li>
           <li>Compliance audit: execute `database/compliance_matrix_reviews_setup.sql`.</li>
           <li>Env: revise `.env.deploy` e redeploy com `docker-compose --env-file .env.deploy up -d --build`.</li>
           <li>Portal externo: confirme API no `:13001` e variável `VITE_FINBR_EXTERNAL_API_BASE`.</li>

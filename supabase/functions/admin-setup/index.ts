@@ -170,6 +170,8 @@ Deno.serve(async (req) => {
         const patch: Record<string, unknown> = {};
         if (body.plan) patch.current_plan = String(body.plan);
         if (body.planStatus) patch.plan_status = String(body.planStatus);
+        if (body.role) patch.role = String(body.role);
+        if (body.experienceLevel) patch.experience_level = String(body.experienceLevel);
         if (body.discount !== undefined && body.discount !== null) {
           patch.discount_percentage = Number(body.discount);
         }
@@ -187,6 +189,145 @@ Deno.serve(async (req) => {
         });
 
         return json(200, { success: true });
+      }
+
+      case 'create-user-manual': {
+        const email = String(body.email || '').trim().toLowerCase();
+        const password = String(body.password || '');
+        const fullName = String(body.fullName || '').trim();
+        const cpf = String(body.cpf || '').trim();
+        const phone = String(body.phone || '').trim();
+        const role = String(body.role || 'user');
+        const experienceLevel = String(body.experienceLevel || 'beginner');
+        const currentPlan = String(body.currentPlan || 'free');
+        const planStatus = String(body.planStatus || 'active');
+        const discount = Number(body.discount ?? 0);
+
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          return json(400, { success: false, error: 'E-mail inválido.' });
+        }
+
+        if (password.length < 6) {
+          return json(400, { success: false, error: 'Senha deve ter pelo menos 6 caracteres.' });
+        }
+
+        const { data: created, error: createErr } = await admin.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: {
+            full_name: fullName || email.split('@')[0],
+            cpf,
+            phone,
+          },
+        });
+
+        if (createErr || !created.user) {
+          return json(400, { success: false, error: createErr?.message || 'Falha ao criar usuário.' });
+        }
+
+        const profilePayload = {
+          user_id: created.user.id,
+          email,
+          full_name: fullName || email.split('@')[0],
+          cpf,
+          phone,
+          role,
+          experience_level: experienceLevel,
+          current_plan: currentPlan,
+          plan_status: planStatus,
+          discount_percentage: discount,
+        };
+
+        const { error: profileErr } = await admin
+          .from('user_profiles')
+          .upsert(profilePayload, { onConflict: 'user_id' });
+
+        if (profileErr) {
+          return json(400, { success: false, error: profileErr.message });
+        }
+
+        await logAdminAction({
+          actorUserId: auth.userId,
+          action: 'create-user-manual',
+          targetTable: 'user_profiles',
+          targetId: created.user.id,
+          payload: { ...profilePayload, password: '***' },
+          result: { success: true },
+        });
+
+        return json(200, {
+          success: true,
+          user: {
+            id: created.user.id,
+            email,
+            full_name: profilePayload.full_name,
+          },
+        });
+      }
+
+      case 'invite-user': {
+        const email = String(body.email || '').trim().toLowerCase();
+        const fullName = String(body.fullName || '').trim();
+        const cpf = String(body.cpf || '').trim();
+        const phone = String(body.phone || '').trim();
+        const role = String(body.role || 'user');
+        const experienceLevel = String(body.experienceLevel || 'beginner');
+        const currentPlan = String(body.currentPlan || 'free');
+        const planStatus = String(body.planStatus || 'pending');
+        const discount = Number(body.discount ?? 0);
+
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          return json(400, { success: false, error: 'E-mail inválido.' });
+        }
+
+        const redirectTo = body.redirectTo ? String(body.redirectTo) : undefined;
+        const inviteOptions = redirectTo ? { redirectTo } : undefined;
+
+        const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, inviteOptions);
+        if (inviteErr || !invited.user) {
+          return json(400, { success: false, error: inviteErr?.message || 'Falha ao enviar convite.' });
+        }
+
+        const profilePayload = {
+          user_id: invited.user.id,
+          email,
+          full_name: fullName || email.split('@')[0],
+          cpf,
+          phone,
+          role,
+          experience_level: experienceLevel,
+          current_plan: currentPlan,
+          plan_status: planStatus,
+          discount_percentage: discount,
+        };
+
+        const { error: profileErr } = await admin
+          .from('user_profiles')
+          .upsert(profilePayload, { onConflict: 'user_id' });
+
+        if (profileErr) {
+          return json(400, { success: false, error: profileErr.message });
+        }
+
+        await logAdminAction({
+          actorUserId: auth.userId,
+          action: 'invite-user',
+          targetTable: 'user_profiles',
+          targetId: invited.user.id,
+          payload: { ...profilePayload, redirectTo: redirectTo || null },
+          result: { success: true },
+        });
+
+        return json(200, {
+          success: true,
+          invited: true,
+          user: {
+            id: invited.user.id,
+            email,
+            full_name: profilePayload.full_name,
+          },
+        });
       }
 
       case 'create-discount-code': {

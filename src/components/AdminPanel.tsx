@@ -62,15 +62,32 @@ const AdminPanel: React.FC = () => {
   const [showCreatePlan, setShowCreatePlan] = useState(false);
   const [showEditPlan, setShowEditPlan] = useState<AdminPlan | null>(null);
   const [showEditUser, setShowEditUser] = useState<UserProfile | null>(null);
+  const [showProvisionUser, setShowProvisionUser] = useState(false);
+  const [provisionMode, setProvisionMode] = useState<'create' | 'invite'>('create');
   const [editPlan, setEditPlan] = useState('');
   const [editStatus, setEditStatus] = useState('');
   const [editDiscount, setEditDiscount] = useState('');
+  const [editRole, setEditRole] = useState<'user' | 'admin'>('user');
+  const [editExperience, setEditExperience] = useState<'beginner' | 'intermediate' | 'professional'>('beginner');
   const [adminNotes, setAdminNotes] = useState('');
 
   // Discount code form
   const [codeForm, setCodeForm] = useState({ code: '', description: '', discountType: 'percentage', discountValue: '', maxUses: '', validUntil: '' });
   // Promotion form
   const [promoForm, setPromoForm] = useState({ title: '', description: '', discountType: 'percentage', discountValue: '', startDate: '', endDate: '' });
+  const [provisionForm, setProvisionForm] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+    cpf: '',
+    phone: '',
+    role: 'user' as 'user' | 'admin',
+    experienceLevel: 'beginner' as 'beginner' | 'intermediate' | 'professional',
+    currentPlan: 'free' as 'free' | 'essencial' | 'profissional' | 'expert',
+    planStatus: 'active' as 'active' | 'pending' | 'suspended' | 'cancelled',
+    discount: '0',
+    redirectTo: '',
+  });
   const [planForm, setPlanForm] = useState({
     name: '',
     slug: '',
@@ -172,19 +189,87 @@ const AdminPanel: React.FC = () => {
         userId: showEditUser.user_id,
         plan: editPlan || undefined,
         planStatus: editStatus || undefined,
-        discount: editDiscount ? parseFloat(editDiscount) : undefined
+        discount: editDiscount ? parseFloat(editDiscount) : undefined,
+        role: editRole,
+        experienceLevel: editExperience,
       },
       async () => {
         await supabase.from('user_profiles').update({
           ...(editPlan ? { current_plan: editPlan } : {}),
           ...(editStatus ? { plan_status: editStatus } : {}),
           ...(editDiscount ? { discount_percentage: parseFloat(editDiscount) } : {}),
+          ...(editRole ? { role: editRole } : {}),
+          ...(editExperience ? { experience_level: editExperience } : {}),
         }).eq('user_id', showEditUser.user_id);
         return { success: true };
       }
     );
     toast({ title: 'Usuário atualizado!' });
     setShowEditUser(null);
+    fetchAdminData();
+  };
+
+  const openProvisionModal = (mode: 'create' | 'invite') => {
+    setProvisionMode(mode);
+    setProvisionForm({
+      fullName: '',
+      email: '',
+      password: '',
+      cpf: '',
+      phone: '',
+      role: 'user',
+      experienceLevel: 'beginner',
+      currentPlan: 'free',
+      planStatus: mode === 'invite' ? 'pending' : 'active',
+      discount: '0',
+      redirectTo: '',
+    });
+    setShowProvisionUser(true);
+  };
+
+  const handleProvisionUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!provisionForm.email) {
+      toast({ title: 'E-mail obrigatório', variant: 'destructive' });
+      return;
+    }
+
+    if (provisionMode === 'create' && provisionForm.password.length < 6) {
+      toast({ title: 'Senha inválida', description: 'Informe ao menos 6 caracteres.', variant: 'destructive' });
+      return;
+    }
+
+    const action = provisionMode === 'create' ? 'create-user-manual' : 'invite-user';
+    const payload = {
+      action,
+      fullName: provisionForm.fullName,
+      email: provisionForm.email,
+      password: provisionMode === 'create' ? provisionForm.password : undefined,
+      cpf: provisionForm.cpf,
+      phone: provisionForm.phone,
+      role: provisionForm.role,
+      experienceLevel: provisionForm.experienceLevel,
+      currentPlan: provisionForm.currentPlan,
+      planStatus: provisionForm.planStatus,
+      discount: Number(provisionForm.discount || 0),
+      redirectTo: provisionForm.redirectTo || undefined,
+    };
+
+    const result = await invokeAdmin<{ success: boolean; error?: string }>(
+      payload,
+      async () => ({ success: false, error: 'Ação disponível apenas via função admin-setup.' })
+    );
+
+    if (!result?.success) {
+      toast({ title: 'Falha ao provisionar usuário', description: result?.error || 'Tente novamente.', variant: 'destructive' });
+      return;
+    }
+
+    toast({
+      title: provisionMode === 'create' ? 'Usuário criado com sucesso' : 'Convite enviado com sucesso',
+    });
+    setShowProvisionUser(false);
     fetchAdminData();
   };
 
@@ -501,17 +586,27 @@ const AdminPanel: React.FC = () => {
         {/* Users Tab */}
         {activeTab === 'users' && (
           <div className="space-y-4">
-            <div className="flex flex-wrap gap-3">
-              <div className="flex-1 min-w-[200px] relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar por nome ou email..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 outline-none" />
+            <div className="flex flex-wrap gap-3 items-start justify-between">
+              <div className="flex flex-wrap gap-3 flex-1 min-w-[300px]">
+                <div className="flex-1 min-w-[200px] relative">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar por nome ou email..."
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 outline-none" />
+                </div>
+                <select value={filterPlan} onChange={e => setFilterPlan(e.target.value)}
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 outline-none">
+                  <option value="">Todos os planos</option>
+                  {Object.entries(planLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
               </div>
-              <select value={filterPlan} onChange={e => setFilterPlan(e.target.value)}
-                className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 outline-none">
-                <option value="">Todos os planos</option>
-                {Object.entries(planLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
+              <div className="flex gap-2">
+                <button onClick={() => openProvisionModal('create')} className="px-4 py-2.5 bg-emerald-500 text-white rounded-xl text-sm font-medium hover:bg-emerald-600 flex items-center gap-2">
+                  <UserPlus size={16} /> Adicionar usuário
+                </button>
+                <button onClick={() => openProvisionModal('invite')} className="px-4 py-2.5 bg-purple-500 text-white rounded-xl text-sm font-medium hover:bg-purple-600 flex items-center gap-2">
+                  <UserPlus size={16} /> Convidar usuário
+                </button>
+              </div>
             </div>
             <div className="bg-white rounded-xl border border-gray-100 overflow-x-auto">
               <table className="w-full">
@@ -546,7 +641,14 @@ const AdminPanel: React.FC = () => {
                       <td className="px-4 py-3 text-sm text-gray-600">{u.discount_percentage > 0 ? `${u.discount_percentage}%` : '-'}</td>
                       <td className="px-4 py-3 text-sm text-gray-500">{new Date(u.created_at).toLocaleDateString('pt-BR')}</td>
                       <td className="px-4 py-3 text-right">
-                        <button onClick={() => { setShowEditUser(u); setEditPlan(u.current_plan); setEditStatus(u.plan_status); setEditDiscount(String(u.discount_percentage || 0)); }}
+                        <button onClick={() => {
+                          setShowEditUser(u);
+                          setEditPlan(u.current_plan);
+                          setEditStatus(u.plan_status);
+                          setEditDiscount(String(u.discount_percentage || 0));
+                          setEditRole(u.role);
+                          setEditExperience(u.experience_level);
+                        }}
                           className="text-gray-400 hover:text-purple-500 transition-colors"><Edit2 size={14} /></button>
                       </td>
                     </tr>
@@ -738,6 +840,21 @@ const AdminPanel: React.FC = () => {
                 </select>
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Perfil de Acesso</label>
+                <select value={editRole} onChange={e => setEditRole(e.target.value as 'user' | 'admin')} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 outline-none">
+                  <option value="user">Usuário</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nível</label>
+                <select value={editExperience} onChange={e => setEditExperience(e.target.value as 'beginner' | 'intermediate' | 'professional')} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 outline-none">
+                  <option value="beginner">Iniciante</option>
+                  <option value="intermediate">Intermediário</option>
+                  <option value="professional">Profissional</option>
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Desconto Pessoal (%)</label>
                 <input type="number" value={editDiscount} onChange={e => setEditDiscount(e.target.value)} min="0" max="100"
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 outline-none" />
@@ -746,6 +863,83 @@ const AdminPanel: React.FC = () => {
                 Salvar Alterações
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Provision User Modal */}
+      {showProvisionUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-gray-900">
+                {provisionMode === 'create' ? 'Adicionar usuário manualmente' : 'Convidar usuário por e-mail'}
+              </h3>
+              <button onClick={() => setShowProvisionUser(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+
+            <form onSubmit={handleProvisionUser} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <input type="text" value={provisionForm.fullName} onChange={e => setProvisionForm({ ...provisionForm, fullName: e.target.value })} placeholder="Nome completo"
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                <input type="email" value={provisionForm.email} onChange={e => setProvisionForm({ ...provisionForm, email: e.target.value })} placeholder="E-mail *" required
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+              </div>
+
+              {provisionMode === 'create' && (
+                <input type="password" value={provisionForm.password} onChange={e => setProvisionForm({ ...provisionForm, password: e.target.value })} placeholder="Senha provisória (mín. 6) *" required
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <input type="text" value={provisionForm.cpf} onChange={e => setProvisionForm({ ...provisionForm, cpf: e.target.value })} placeholder="CPF"
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                <input type="text" value={provisionForm.phone} onChange={e => setProvisionForm({ ...provisionForm, phone: e.target.value })} placeholder="Telefone"
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <select value={provisionForm.role} onChange={e => setProvisionForm({ ...provisionForm, role: e.target.value as 'user' | 'admin' })}
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm">
+                  <option value="user">Perfil: Usuário</option>
+                  <option value="admin">Perfil: Administrador</option>
+                </select>
+                <select value={provisionForm.experienceLevel} onChange={e => setProvisionForm({ ...provisionForm, experienceLevel: e.target.value as 'beginner' | 'intermediate' | 'professional' })}
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm">
+                  <option value="beginner">Nível: Iniciante</option>
+                  <option value="intermediate">Nível: Intermediário</option>
+                  <option value="professional">Nível: Profissional</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <select value={provisionForm.currentPlan} onChange={e => setProvisionForm({ ...provisionForm, currentPlan: e.target.value as 'free' | 'essencial' | 'profissional' | 'expert' })}
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm">
+                  <option value="free">Plano: Gratuito</option>
+                  <option value="essencial">Plano: Essencial</option>
+                  <option value="profissional">Plano: Profissional</option>
+                  <option value="expert">Plano: Expert</option>
+                </select>
+                <select value={provisionForm.planStatus} onChange={e => setProvisionForm({ ...provisionForm, planStatus: e.target.value as 'active' | 'pending' | 'suspended' | 'cancelled' })}
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm">
+                  <option value="active">Status: Ativo</option>
+                  <option value="pending">Status: Pendente</option>
+                  <option value="suspended">Status: Suspenso</option>
+                  <option value="cancelled">Status: Cancelado</option>
+                </select>
+                <input type="number" min="0" max="100" value={provisionForm.discount} onChange={e => setProvisionForm({ ...provisionForm, discount: e.target.value })} placeholder="Desconto %"
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+              </div>
+
+              {provisionMode === 'invite' && (
+                <input type="url" value={provisionForm.redirectTo} onChange={e => setProvisionForm({ ...provisionForm, redirectTo: e.target.value })} placeholder="Redirect opcional do convite"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+              )}
+
+              <button type="submit" className="w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-xl font-semibold hover:shadow-lg transition-all">
+                {provisionMode === 'create' ? 'Criar usuário' : 'Enviar convite'}
+              </button>
+            </form>
           </div>
         </div>
       )}

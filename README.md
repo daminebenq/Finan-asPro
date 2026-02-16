@@ -37,7 +37,7 @@ Run SQL scripts in your Supabase SQL editor in this order:
 
 1. `database/full_setup.sql` (full schema, policies, indexes, seed plans)
 2. `database/subdatabase_setup.sql` (additional logical subdatabase migration script)
-3. `database/fix_subprojects_api_access.sql` (if `/rest/v1/subprojects` returns `400 Bad Request`)
+3. `database/fix_subprojects_api_access.sql` (one-shot recovery if `/rest/v1/subprojects` returns `400 Bad Request` or `relation "subprojects" does not exist`)
 
 > If you already created some tables manually, both scripts are idempotent-oriented (`if not exists`/safe updates), but review before running in production.
 

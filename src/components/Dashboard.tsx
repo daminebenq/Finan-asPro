@@ -377,7 +377,7 @@ const Dashboard: React.FC = () => {
     { id: 'goals', label: 'Metas', icon: Target },
     { id: 'usecases', label: 'Casos BR', icon: Calculator },
     { id: 'compliance', label: 'Conformidade', icon: Scale },
-    { id: 'education', label: 'Educação', icon: BookOpen },
+    { id: 'education', label: 'Centro de Aprendizado', icon: BookOpen },
   ];
 
   const educationalContent = [
@@ -698,10 +698,7 @@ const Dashboard: React.FC = () => {
         )}
 
         {activeTab === 'usecases' && (
-          <div className="space-y-4">
-            <BrazilUseCases cpfFromProfile={profile?.cpf || ''} />
-            <TaxLearningCenter />
-          </div>
+          <BrazilUseCases cpfFromProfile={profile?.cpf || ''} />
         )}
 
         {activeTab === 'compliance' && (
@@ -711,6 +708,7 @@ const Dashboard: React.FC = () => {
         {/* Education Tab */}
         {activeTab === 'education' && (
           <div className="space-y-6">
+            <TaxLearningCenter />
             {['beginner', 'intermediate', 'professional'].map(level => {
               const levelLabel = level === 'beginner' ? 'Iniciante' : level === 'intermediate' ? 'Intermediário' : 'Profissional';
               const content = educationalContent.filter(c => c.level === level);

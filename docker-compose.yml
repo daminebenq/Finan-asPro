@@ -10,4 +10,4 @@ services:
         VITE_FINBR_EXTERNAL_ADMIN_KEY: ${VITE_FINBR_EXTERNAL_ADMIN_KEY}
     restart: unless-stopped
     ports:
-      - "${HOST_PORT:-43991}:80"
+      - "${HOST_PORT:-43993}:80"

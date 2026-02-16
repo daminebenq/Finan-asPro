@@ -105,7 +105,7 @@ const AdminPanel: React.FC = () => {
     has_reports: true,
   });
 
-  const invokeAdmin = useCallback(async <T,>(body: Record<string, any>, _fallback?: () => Promise<T>): Promise<T> => {
+  const invokeAdmin = useCallback(async <T,>(body: Record<string, any>, fallback?: () => Promise<T>): Promise<T> => {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
@@ -118,34 +118,75 @@ const AdminPanel: React.FC = () => {
       throw new Error('Sessão inválida para ações administrativas. Faça login novamente.');
     }
 
-    const response = await fetch(`${supabaseUrl}/functions/v1/admin-setup`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: supabaseAnonKey,
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify(body),
-    });
+    try {
+      const response = await fetch(`${supabaseUrl}/functions/v1/admin-setup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(body),
+      });
 
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || payload?.success === false) {
-      throw new Error(payload?.error || payload?.message || `Falha backend (${response.status})`);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.error || payload?.message || `Falha backend (${response.status})`);
+      }
+
+      setBackendStatus('connected');
+      setBackendMessage('');
+      return payload as T;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha de integração com backend admin.';
+      const isRuntimeHeaderFailure = /req\.headers\.get is not a function/i.test(message);
+
+      if (fallback && (isRuntimeHeaderFailure || /backend admin indisponível|falha backend|internal server error/i.test(message))) {
+        setBackendStatus('disconnected');
+        setBackendMessage('Função admin indisponível no runtime. Usando fallback parcial via banco para esta ação.');
+        return fallback();
+      }
+
+      throw error;
     }
-
-    setBackendStatus('connected');
-    setBackendMessage('');
-    return payload as T;
   }, []);
 
   const fetchAdminData = useCallback(async () => {
     setLoading(true);
     try {
       const [usersData, requestsData, codesData, promosData] = await Promise.all([
-        invokeAdmin<{ users: UserProfile[] }>({ action: 'get-all-users' }),
-        invokeAdmin<{ requests: PlanRequest[] }>({ action: 'get-pending-requests' }),
-        invokeAdmin<{ codes: DiscountCode[] }>({ action: 'get-discount-codes' }),
-        invokeAdmin<{ promotions: Promotion[] }>({ action: 'get-promotions-admin' }),
+        invokeAdmin<{ users: UserProfile[] }>(
+          { action: 'get-all-users' },
+          async () => {
+            const { data, error } = await supabase.from('user_profiles').select('*').order('created_at', { ascending: false });
+            if (error) throw error;
+            return { users: (data || []) as UserProfile[] };
+          }
+        ),
+        invokeAdmin<{ requests: PlanRequest[] }>(
+          { action: 'get-pending-requests' },
+          async () => {
+            const { data, error } = await supabase.from('plan_requests').select('*').order('created_at', { ascending: false });
+            if (error) throw error;
+            return { requests: (data || []) as PlanRequest[] };
+          }
+        ),
+        invokeAdmin<{ codes: DiscountCode[] }>(
+          { action: 'get-discount-codes' },
+          async () => {
+            const { data, error } = await supabase.from('discount_codes').select('*').order('created_at', { ascending: false });
+            if (error) throw error;
+            return { codes: (data || []) as DiscountCode[] };
+          }
+        ),
+        invokeAdmin<{ promotions: Promotion[] }>(
+          { action: 'get-promotions-admin' },
+          async () => {
+            const { data, error } = await supabase.from('promotions').select('*').order('created_at', { ascending: false });
+            if (error) throw error;
+            return { promotions: (data || []) as Promotion[] };
+          }
+        ),
       ]);
       const { data: plansData } = await supabase.from('plans').select('*').order('price_monthly', { ascending: true });
       if (usersData?.users) setUsers(usersData.users);
@@ -166,7 +207,35 @@ const AdminPanel: React.FC = () => {
 
   const handleApproveRequest = async (requestId: string, approved: boolean) => {
     await invokeAdmin(
-      { action: 'approve-plan', requestId, approved, adminNotes }
+      { action: 'approve-plan', requestId, approved, adminNotes },
+      async () => {
+        const { data: requestRow, error: reqErr } = await supabase
+          .from('plan_requests')
+          .select('*')
+          .eq('id', requestId)
+          .maybeSingle();
+        if (reqErr || !requestRow) throw (reqErr || new Error('Plan request not found.'));
+
+        const status = approved ? 'approved' : 'rejected';
+        const { error: updateReqErr } = await supabase
+          .from('plan_requests')
+          .update({ status, admin_notes: adminNotes || null })
+          .eq('id', requestId);
+        if (updateReqErr) throw updateReqErr;
+
+        if (approved) {
+          const { error: updateProfileErr } = await supabase
+            .from('user_profiles')
+            .update({
+              current_plan: requestRow.requested_plan,
+              plan_status: 'active',
+            })
+            .eq('user_id', requestRow.user_id);
+          if (updateProfileErr) throw updateProfileErr;
+        }
+
+        return { success: true } as any;
+      }
     );
     toast({ title: approved ? 'Plano aprovado!' : 'Solicitação rejeitada' });
     setAdminNotes('');
@@ -184,6 +253,18 @@ const AdminPanel: React.FC = () => {
         discount: editDiscount ? parseFloat(editDiscount) : undefined,
         role: editRole,
         experienceLevel: editExperience,
+      },
+      async () => {
+        const patch: Record<string, any> = {};
+        if (editPlan) patch.current_plan = editPlan;
+        if (editStatus) patch.plan_status = editStatus;
+        if (editDiscount) patch.discount_percentage = parseFloat(editDiscount);
+        patch.role = editRole;
+        patch.experience_level = editExperience;
+
+        const { error } = await supabase.from('user_profiles').update(patch).eq('user_id', showEditUser.user_id);
+        if (error) throw error;
+        return { success: true } as any;
       }
     );
     toast({ title: 'Usuário atualizado!' });
@@ -239,7 +320,10 @@ const AdminPanel: React.FC = () => {
     };
 
     const result = await invokeAdmin<{ success: boolean; error?: string }>(
-      payload
+      payload,
+      async () => {
+        throw new Error('Criação/convite de usuário exige function admin-setup em runtime válido.');
+      }
     );
 
     if (!result?.success) {
@@ -265,6 +349,21 @@ const AdminPanel: React.FC = () => {
         discountValue: parseFloat(codeForm.discountValue),
         maxUses: codeForm.maxUses ? parseInt(codeForm.maxUses) : -1,
         validUntil: codeForm.validUntil || null
+      },
+      async () => {
+        const payload = {
+          code: codeForm.code,
+          description: codeForm.description,
+          discount_type: codeForm.discountType,
+          discount_value: parseFloat(codeForm.discountValue),
+          max_uses: codeForm.maxUses ? parseInt(codeForm.maxUses) : -1,
+          valid_until: codeForm.validUntil || null,
+          is_active: true,
+          current_uses: 0,
+        };
+        const { error } = await supabase.from('discount_codes').insert(payload);
+        if (error) throw error;
+        return { success: true };
       }
     );
     if (data?.success) {
@@ -288,6 +387,21 @@ const AdminPanel: React.FC = () => {
         discountValue: parseFloat(promoForm.discountValue),
         startDate: promoForm.startDate || null,
         endDate: promoForm.endDate || null
+      },
+      async () => {
+        const payload = {
+          title: promoForm.title,
+          description: promoForm.description,
+          discount_type: promoForm.discountType,
+          discount_value: parseFloat(promoForm.discountValue),
+          start_date: promoForm.startDate || null,
+          end_date: promoForm.endDate || null,
+          is_active: true,
+          applicable_plans: [],
+        };
+        const { error } = await supabase.from('promotions').insert(payload);
+        if (error) throw error;
+        return { success: true };
       }
     );
     if (data?.success) {
@@ -300,14 +414,30 @@ const AdminPanel: React.FC = () => {
 
   const toggleCode = async (codeId: string, isActive: boolean) => {
     await invokeAdmin(
-      { action: 'toggle-discount-code', codeId, isActive }
+      { action: 'toggle-discount-code', codeId, isActive },
+      async () => {
+        const { error } = await supabase
+          .from('discount_codes')
+          .update({ is_active: isActive })
+          .eq('id', codeId);
+        if (error) throw error;
+        return { success: true } as any;
+      }
     );
     fetchAdminData();
   };
 
   const togglePromo = async (promoId: string, isActive: boolean) => {
     await invokeAdmin(
-      { action: 'toggle-promotion', promotionId: promoId, isActive }
+      { action: 'toggle-promotion', promotionId: promoId, isActive },
+      async () => {
+        const { error } = await supabase
+          .from('promotions')
+          .update({ is_active: isActive })
+          .eq('id', promoId);
+        if (error) throw error;
+        return { success: true } as any;
+      }
     );
     fetchAdminData();
   };

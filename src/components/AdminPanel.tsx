@@ -4,10 +4,11 @@ import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/use-toast';
 import DatabaseStudio from './DatabaseStudio';
 import ExternalPortalAdmin from './ExternalPortalAdmin';
+import SetupAssistant from './SetupAssistant';
 import {
   Users, CreditCard, Tag, Megaphone, Search, Check, X, ChevronDown,
   Shield, Eye, Edit2, Loader2, Plus, ToggleLeft, ToggleRight, Clock,
-  BarChart3, TrendingUp, UserPlus, AlertCircle, Database, Layers, Link
+  BarChart3, TrendingUp, UserPlus, AlertCircle, Database, Layers, Link, Wrench
 } from 'lucide-react';
 
 interface PlanRequest {
@@ -401,6 +402,7 @@ const AdminPanel: React.FC = () => {
     { id: 'discounts', label: 'Descontos', icon: Tag },
     { id: 'promotions', label: 'Promoções', icon: Megaphone },
     { id: 'portal18080', label: 'Portal 18080', icon: Link },
+    { id: 'setup', label: 'Setup', icon: Wrench },
     { id: 'db', label: 'Banco de Dados', icon: Database },
   ];
 
@@ -698,6 +700,10 @@ const AdminPanel: React.FC = () => {
         {/* DB Management Tab */}
         {activeTab === 'portal18080' && (
           <ExternalPortalAdmin />
+        )}
+
+        {activeTab === 'setup' && (
+          <SetupAssistant />
         )}
 
         {/* DB Management Tab */}

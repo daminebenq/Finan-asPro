@@ -137,6 +137,7 @@ Este painel em `:43993` pode atuar como portal administrativo do app em `http://
 
 - Aba `Portal 18080` no Admin permite: health check, resumo financeiro, CRUD básico de transações e metas (com aporte).
 - Configure `VITE_FINBR_EXTERNAL_API_BASE` se a API externa estiver em outro host/porta.
+- Aba `Setup` no Admin valida automaticamente envs críticos, conectividade externa e tabelas obrigatórias (`subprojects`, `compliance_matrix_reviews`) com runbook de correção.
 
 ## Open APIs sem chave (PF/PJ)
 

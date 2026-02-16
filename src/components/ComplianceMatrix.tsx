@@ -338,14 +338,18 @@ const ComplianceMatrix: React.FC = () => {
                             >
                               Todas
                             </button>
-                            <span className="px-2 py-1 rounded-md bg-gray-100 text-gray-600 text-xs">
+                            <button
+                              onClick={() => setHistoryRange(historyRange === 'all' ? '30d' : 'all')}
+                              className="px-2 py-1 rounded-md bg-gray-100 text-gray-600 text-xs hover:bg-gray-200 transition-colors"
+                              title={historyRange === 'all' ? 'Alternar para últimos 30 dias' : 'Alternar para todas'}
+                            >
                               {(reviewHistoryByEntry[row.id] || []).filter((review) => {
                                 if (historyRange === 'all') return true;
                                 const reviewedAt = new Date(review.reviewed_at).getTime();
                                 const minDate = Date.now() - 30 * 24 * 60 * 60 * 1000;
                                 return reviewedAt >= minDate;
                               }).length} itens
-                            </span>
+                            </button>
                           </div>
                           <button
                             onClick={() => exportHistoryCsv(row.id, row.topic)}

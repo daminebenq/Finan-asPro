@@ -74,6 +74,12 @@ If building with Docker/Compose, also provide frontend env vars at build time:
 
 - `VITE_SUPABASE_URL=https://<your-project-ref>.supabase.co VITE_SUPABASE_ANON_KEY=<your-anon-key> HOST_PORT=43991 docker-compose up -d --build`
 
+Or use a deploy env file:
+
+- `cp .env.deploy.example .env.deploy`
+- edit `.env.deploy` with real Supabase values
+- `set -a && source .env.deploy && set +a && docker-compose up -d --build`
+
 The app is exposed on host port `43991` by default and can be changed with `HOST_PORT`.
 
 ### One-command remote deploy

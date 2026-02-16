@@ -27,6 +27,8 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+.env.deploy
 !.env.example
+!.env.deploy.example
 
 .release/

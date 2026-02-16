@@ -14,6 +14,7 @@ import {
   listExternalAdminUsers,
   listExternalGoals,
   listExternalTransactions,
+  resetExternalGoal,
   resetExternalUserData,
   revokeExternalUserSessions,
   type ExternalAdminHealth,
@@ -35,6 +36,7 @@ const ExternalPortalAdmin: React.FC = () => {
   const [adminUsers, setAdminUsers] = useState<ExternalAdminUser[]>([]);
   const [adminError, setAdminError] = useState<string | null>(null);
   const [contribution, setContribution] = useState<Record<string, string>>({});
+  const [showGoalForm, setShowGoalForm] = useState(false);
 
   const [txForm, setTxForm] = useState({
     description: '',
@@ -124,7 +126,7 @@ const ExternalPortalAdmin: React.FC = () => {
       });
       toast({ title: 'Transação criada no portal 18080' });
       setTxForm({ description: '', amount: '', category: 'Outros', date: new Date().toISOString().slice(0, 10), type: 'expense' });
-      loadExternalData();
+      await loadExternalData();
     } catch (error) {
       toast({ title: 'Erro ao criar transação', description: error instanceof Error ? error.message : 'Falha', variant: 'destructive' });
     }
@@ -134,7 +136,7 @@ const ExternalPortalAdmin: React.FC = () => {
     try {
       await deleteExternalTransaction(id);
       toast({ title: 'Transação removida no portal 18080' });
-      loadExternalData();
+      await loadExternalData();
     } catch (error) {
       toast({ title: 'Erro ao remover transação', description: error instanceof Error ? error.message : 'Falha', variant: 'destructive' });
     }
@@ -142,17 +144,25 @@ const ExternalPortalAdmin: React.FC = () => {
 
   const handleCreateGoal = async (e: React.FormEvent) => {
     e.preventDefault();
+    const targetAmount = Number(goalForm.targetAmount);
+    const monthlyContribution = Number(goalForm.monthlyContribution);
+    if (!targetAmount || targetAmount <= 0 || !monthlyContribution || monthlyContribution <= 0) {
+      toast({ title: 'Valores inválidos', description: 'Informe valor alvo e aporte mensal maiores que zero.', variant: 'destructive' });
+      return;
+    }
+
     try {
       await createExternalGoal({
         name: goalForm.name,
-        targetAmount: Number(goalForm.targetAmount),
-        monthlyContribution: Number(goalForm.monthlyContribution),
+        targetAmount,
+        monthlyContribution,
         deadline: goalForm.deadline,
         category: goalForm.category,
       });
       toast({ title: 'Meta criada no portal 18080' });
       setGoalForm({ name: '', targetAmount: '', monthlyContribution: '', deadline: '', category: 'Planejamento' });
-      loadExternalData();
+      setShowGoalForm(false);
+      await loadExternalData();
     } catch (error) {
       toast({ title: 'Erro ao criar meta', description: error instanceof Error ? error.message : 'Falha', variant: 'destructive' });
     }
@@ -162,9 +172,19 @@ const ExternalPortalAdmin: React.FC = () => {
     try {
       await deleteExternalGoal(id);
       toast({ title: 'Meta removida no portal 18080' });
-      loadExternalData();
+      await loadExternalData();
     } catch (error) {
       toast({ title: 'Erro ao remover meta', description: error instanceof Error ? error.message : 'Falha', variant: 'destructive' });
+    }
+  };
+
+  const handleResetGoal = async (id: string) => {
+    try {
+      await resetExternalGoal(id);
+      toast({ title: 'Meta resetada', description: 'Valor acumulado da meta foi zerado.' });
+      await loadExternalData();
+    } catch (error) {
+      toast({ title: 'Erro ao resetar meta', description: error instanceof Error ? error.message : 'Falha', variant: 'destructive' });
     }
   };
 
@@ -178,7 +198,7 @@ const ExternalPortalAdmin: React.FC = () => {
       await contributeExternalGoal(goalId, amount);
       setContribution((prev) => ({ ...prev, [goalId]: '' }));
       toast({ title: 'Aporte realizado no portal 18080' });
-      loadExternalData();
+      await loadExternalData();
     } catch (error) {
       toast({ title: 'Erro ao aportar', description: error instanceof Error ? error.message : 'Falha', variant: 'destructive' });
     }
@@ -188,7 +208,7 @@ const ExternalPortalAdmin: React.FC = () => {
     try {
       const response = await revokeExternalUserSessions(userId);
       toast({ title: 'Sessões revogadas', description: `${response.revokedSessions || 0} sessão(ões) encerrada(s).` });
-      loadExternalData();
+      await loadExternalData();
     } catch (error) {
       toast({ title: 'Erro ao revogar sessões', description: error instanceof Error ? error.message : 'Falha', variant: 'destructive' });
     }
@@ -198,7 +218,7 @@ const ExternalPortalAdmin: React.FC = () => {
     try {
       await resetExternalUserData(userId);
       toast({ title: 'Dados do usuário resetados no portal 18080' });
-      loadExternalData();
+      await loadExternalData();
     } catch (error) {
       toast({ title: 'Erro ao resetar dados', description: error instanceof Error ? error.message : 'Falha', variant: 'destructive' });
     }
@@ -282,18 +302,28 @@ const ExternalPortalAdmin: React.FC = () => {
         </div>
 
         <div className="bg-white rounded-xl border border-gray-100 p-5">
-          <h4 className="font-semibold text-gray-900 mb-3">Metas do portal 18080</h4>
-
-          <form onSubmit={handleCreateGoal} className="grid grid-cols-2 gap-2 mb-4">
-            <input value={goalForm.name} onChange={(e) => setGoalForm((p) => ({ ...p, name: e.target.value }))} required placeholder="Nome da meta" className="col-span-2 px-3 py-2 border border-gray-200 rounded-lg text-sm" />
-            <input type="number" step="0.01" value={goalForm.targetAmount} onChange={(e) => setGoalForm((p) => ({ ...p, targetAmount: e.target.value }))} required placeholder="Valor alvo" className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
-            <input type="number" step="0.01" value={goalForm.monthlyContribution} onChange={(e) => setGoalForm((p) => ({ ...p, monthlyContribution: e.target.value }))} required placeholder="Aporte mensal" className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
-            <input type="date" value={goalForm.deadline} onChange={(e) => setGoalForm((p) => ({ ...p, deadline: e.target.value }))} required className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
-            <input value={goalForm.category} onChange={(e) => setGoalForm((p) => ({ ...p, category: e.target.value }))} placeholder="Categoria" className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
-            <button type="submit" className="col-span-2 px-3 py-2 bg-purple-500 text-white rounded-lg text-sm font-medium hover:bg-purple-600 inline-flex items-center justify-center gap-2">
-              <Goal size={14} /> Criar meta
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-semibold text-gray-900">Metas do portal 18080</h4>
+            <button
+              onClick={() => setShowGoalForm((prev) => !prev)}
+              className="px-3 py-2 bg-purple-500 text-white rounded-lg text-sm font-medium hover:bg-purple-600 inline-flex items-center gap-2"
+            >
+              <Plus size={14} /> Nova meta
             </button>
-          </form>
+          </div>
+
+          {showGoalForm && (
+            <form onSubmit={handleCreateGoal} className="grid grid-cols-2 gap-2 mb-4">
+              <input value={goalForm.name} onChange={(e) => setGoalForm((p) => ({ ...p, name: e.target.value }))} required placeholder="Nome da meta" className="col-span-2 px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+              <input type="number" step="0.01" value={goalForm.targetAmount} onChange={(e) => setGoalForm((p) => ({ ...p, targetAmount: e.target.value }))} required placeholder="Valor alvo" className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+              <input type="number" step="0.01" value={goalForm.monthlyContribution} onChange={(e) => setGoalForm((p) => ({ ...p, monthlyContribution: e.target.value }))} required placeholder="Aporte mensal" className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+              <input type="date" value={goalForm.deadline} onChange={(e) => setGoalForm((p) => ({ ...p, deadline: e.target.value }))} required className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+              <input value={goalForm.category} onChange={(e) => setGoalForm((p) => ({ ...p, category: e.target.value }))} placeholder="Categoria" className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+              <button type="submit" className="col-span-2 px-3 py-2 bg-purple-500 text-white rounded-lg text-sm font-medium hover:bg-purple-600 inline-flex items-center justify-center gap-2">
+                <Goal size={14} /> Criar meta
+              </button>
+            </form>
+          )}
 
           <div className="space-y-2 max-h-72 overflow-auto">
             {goals.map((goal) => {
@@ -319,6 +349,9 @@ const ExternalPortalAdmin: React.FC = () => {
                     />
                     <button onClick={() => handleContributeGoal(goal.id)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 inline-flex items-center gap-1">
                       <Activity size={13} /> Aportar
+                    </button>
+                    <button onClick={() => handleResetGoal(goal.id)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm hover:bg-amber-50 text-amber-700 inline-flex items-center gap-1">
+                      <RefreshCcw size={13} /> Resetar
                     </button>
                     <button onClick={() => handleDeleteGoal(goal.id)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm hover:bg-red-50 text-red-600 inline-flex items-center gap-1">
                       <Trash2 size={13} /> Excluir

@@ -154,6 +154,11 @@ export const contributeExternalGoal = (id: string, amount: number) =>
     body: JSON.stringify({ amount }),
   });
 
+export const resetExternalGoal = (id: string) =>
+  request<ExternalGoal>(`/goals/${id}/reset`, {
+    method: 'POST',
+  });
+
 export const deleteExternalGoal = (id: string) =>
   request<void>(`/goals/${id}`, { method: 'DELETE' });
 

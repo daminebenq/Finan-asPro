@@ -15,7 +15,7 @@ import {
   Plus, Trash2, Edit2, Download, Upload, TrendingUp, TrendingDown,
   DollarSign, Target, PieChart, BarChart3, FileText, BookOpen,
   ArrowUpRight, ArrowDownRight, Filter, Search, X, Save, ChevronDown,
-  UserCircle2, LogOut, Settings, Shield, Database
+  UserCircle2, LogOut, Settings, Shield, Database, Calculator
 } from 'lucide-react';
 
 const CATEGORIES = [

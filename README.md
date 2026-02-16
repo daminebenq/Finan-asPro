@@ -164,3 +164,5 @@ Para habilitar trilha de auditoria de revisões (campo "revisado por" + observa�
 - `database/compliance_matrix_reviews_setup.sql`
 
 Após isso, admins podem registrar revisões na aba `Conformidade`, e exportar matriz em CSV/PDF.
+
+A matriz também exibe `Histórico` por entrada em drawer, com timeline de revisões (quem revisou, quando e observações).

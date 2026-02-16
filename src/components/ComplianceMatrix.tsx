@@ -1,8 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BookText, Download, FileText, Save, ShieldCheck } from 'lucide-react';
+import { BookText, Download, FileText, History, Save, ShieldCheck } from 'lucide-react';
 import { useAppContext } from '@/contexts/app-context';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/use-toast';
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from '@/components/ui/drawer';
 
 interface ComplianceRow {
   id: string;
@@ -100,6 +110,7 @@ const complianceRows: ComplianceRow[] = [
 const ComplianceMatrix: React.FC = () => {
   const { user, profile } = useAppContext();
   const [reviewsByEntry, setReviewsByEntry] = useState<Record<string, ComplianceReview>>({});
+  const [reviewHistoryByEntry, setReviewHistoryByEntry] = useState<Record<string, ComplianceReview[]>>({});
   const [selectedEntry, setSelectedEntry] = useState(complianceRows[0]?.id || '');
   const [reviewNote, setReviewNote] = useState('');
   const [savingReview, setSavingReview] = useState(false);
@@ -129,10 +140,15 @@ const ComplianceMatrix: React.FC = () => {
     }
 
     const latest: Record<string, ComplianceReview> = {};
+    const fullHistory: Record<string, ComplianceReview[]> = {};
     (data as ComplianceReview[]).forEach((row) => {
+      if (!fullHistory[row.entry_id]) fullHistory[row.entry_id] = [];
+      fullHistory[row.entry_id].push(row);
       if (!latest[row.entry_id]) latest[row.entry_id] = row;
     });
+
     setReviewsByEntry(latest);
+    setReviewHistoryByEntry(fullHistory);
   };
 
   useEffect(() => {
@@ -249,6 +265,7 @@ const ComplianceMatrix: React.FC = () => {
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Última revisão</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Revisado por</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Observações</th>
+              <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Histórico</th>
             </tr>
           </thead>
           <tbody>
@@ -266,6 +283,43 @@ const ComplianceMatrix: React.FC = () => {
                 <td className="px-4 py-3 text-sm text-gray-600">{row.lastReviewed}</td>
                 <td className="px-4 py-3 text-sm text-gray-600">{row.reviewedBy}</td>
                 <td className="px-4 py-3 text-sm text-gray-500">{row.reviewNote}</td>
+                <td className="px-4 py-3 text-right">
+                  <Drawer>
+                    <DrawerTrigger asChild>
+                      <button className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1">
+                        <History size={12} /> Ver histórico
+                      </button>
+                    </DrawerTrigger>
+                    <DrawerContent className="max-h-[75vh]">
+                      <DrawerHeader>
+                        <DrawerTitle>Histórico de revisões</DrawerTitle>
+                        <DrawerDescription>{row.topic}</DrawerDescription>
+                      </DrawerHeader>
+                      <div className="px-4 pb-2 overflow-y-auto">
+                        {(reviewHistoryByEntry[row.id] || []).length > 0 ? (
+                          <div className="space-y-2 pb-4">
+                            {(reviewHistoryByEntry[row.id] || []).map((review) => (
+                              <div key={review.id} className="border border-gray-100 rounded-lg p-3">
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                  <p className="text-sm font-medium text-gray-900">{review.reviewer_name || 'Admin'}</p>
+                                  <p className="text-xs text-gray-500">{new Date(review.reviewed_at).toLocaleString('pt-BR')}</p>
+                                </div>
+                                <p className="text-sm text-gray-600">{review.review_note || 'Sem observações adicionais.'}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500 pb-4">Nenhuma revisão registrada para esta entrada.</p>
+                        )}
+                      </div>
+                      <DrawerFooter>
+                        <DrawerClose asChild>
+                          <button className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50">Fechar</button>
+                        </DrawerClose>
+                      </DrawerFooter>
+                    </DrawerContent>
+                  </Drawer>
+                </td>
               </tr>
             ))}
           </tbody>

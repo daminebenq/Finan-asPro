@@ -97,17 +97,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return p;
   }, []);
 
-  const fetchProfile = useCallback(async (userId: string) => {
+  const fetchProfile = useCallback(async (userId: string, userEmail?: string) => {
     const { data, error } = await supabase
       .from('user_profiles')
       .select('*')
       .eq('user_id', userId)
-      .single();
-    if (data && !error) {
+      .maybeSingle();
+
+    if (error) {
+      console.error('Failed to fetch profile:', error.message);
+      return null;
+    }
+
+    if (data) {
       const profileData = applyOwnerAdminFallback(data as UserProfile);
       setProfile(profileData);
       return profileData;
     }
+
+    if (!userEmail) return null;
+
+    const normalizedEmail = normalizeEmail(userEmail);
+    const createdProfile = {
+      user_id: userId,
+      email: normalizedEmail,
+      full_name: normalizedEmail.split('@')[0],
+      role: normalizedEmail === OWNER_EMAIL ? 'admin' : 'user',
+      experience_level: 'beginner',
+      current_plan: normalizedEmail === OWNER_EMAIL ? 'expert' : 'free',
+      plan_status: 'active',
+    };
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('user_profiles')
+      .insert(createdProfile)
+      .select('*')
+      .maybeSingle();
+
+    if (insertError) {
+      console.error('Failed to create missing profile:', insertError.message);
+      return null;
+    }
+
+    if (inserted) {
+      const profileData = applyOwnerAdminFallback(inserted as UserProfile);
+      setProfile(profileData);
+      return profileData;
+    }
+
     return null;
   }, [applyOwnerAdminFallback]);
 
@@ -125,7 +162,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const refreshProfile = useCallback(async () => {
-    if (user) await fetchProfile(user.id);
+    if (user) await fetchProfile(user.id, user.email || undefined);
   }, [user, fetchProfile]);
 
   useEffect(() => {
@@ -188,7 +225,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setAuthMode('login');
             setShowAuthModal(true);
           }
-          const p = await fetchProfile(session.user.id);
+          const p = await fetchProfile(session.user.id, session.user.email || undefined);
           if (p) {
             setCurrentPage(p.role === 'admin' ? 'admin' : 'dashboard');
           }
@@ -210,7 +247,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           scheduleSessionTimeout(expiry);
 
           setUser(session.user);
-          const p = await fetchProfile(session.user.id);
+          const p = await fetchProfile(session.user.id, session.user.email || undefined);
           if (p) {
             setCurrentPage(p.role === 'admin' ? 'admin' : 'dashboard');
           }

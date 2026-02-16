@@ -18,6 +18,7 @@ Create a `.env` file in project root:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 - `VITE_FINBR_EXTERNAL_API_BASE` (opcional, padrão sugerido: `http://187.84.150.128:13001/api`)
+- `VITE_FINBR_EXTERNAL_ADMIN_KEY` (opcional, recomendado quando a API externa exigir chave admin)
 - `VITE_CPF_SCORE_API_URL` (opcional, para consulta de score CPF)
 - `VITE_CPF_SCORE_API_KEY` (opcional)
 - `VITE_CPF_SCORE_API_CPF_PARAM` (opcional, padrão: `cpf`)
@@ -137,6 +138,7 @@ Este painel em `:43993` pode atuar como portal administrativo do app em `http://
 
 - Aba `Portal 18080` no Admin permite: health check, resumo financeiro, CRUD básico de transações e metas (com aporte).
 - Configure `VITE_FINBR_EXTERNAL_API_BASE` se a API externa estiver em outro host/porta.
+- Se a API externa estiver protegida com chave administrativa, configure `VITE_FINBR_EXTERNAL_ADMIN_KEY` (enviada no header `x-admin-key`).
 - Aba `Setup` no Admin valida automaticamente envs críticos, conectividade externa e tabelas obrigatórias (`subprojects`, `compliance_matrix_reviews`) com runbook de correção.
 
 ## Open APIs sem chave (PF/PJ)

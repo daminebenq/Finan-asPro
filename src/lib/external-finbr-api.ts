@@ -43,11 +43,13 @@ const getDefaultApiBase = () => {
 };
 
 export const externalApiBase = getDefaultApiBase();
+const externalAdminKey = (import.meta.env.VITE_FINBR_EXTERNAL_ADMIN_KEY as string | undefined)?.trim();
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${externalApiBase}${path}`, {
     headers: {
       'Content-Type': 'application/json',
+      ...(externalAdminKey ? { 'x-admin-key': externalAdminKey } : {}),
       ...(init?.headers || {}),
     },
     ...init,

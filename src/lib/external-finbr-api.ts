@@ -130,8 +130,17 @@ export const getExternalSummary = () =>
 export const listExternalTransactions = () =>
   request<ExternalTransaction[]>('/transactions');
 
+export const listExternalUserTransactions = (userId: string) =>
+  request<ExternalTransaction[]>(`/admin/users/${userId}/transactions`);
+
 export const createExternalTransaction = (payload: Omit<ExternalTransaction, 'id' | 'amount'> & { amount: number }) =>
   request<ExternalTransaction>('/transactions', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const createExternalUserTransaction = (userId: string, payload: Omit<ExternalTransaction, 'id' | 'amount'> & { amount: number }) =>
+  request<ExternalTransaction>(`/admin/users/${userId}/transactions`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -139,11 +148,23 @@ export const createExternalTransaction = (payload: Omit<ExternalTransaction, 'id
 export const deleteExternalTransaction = (id: string) =>
   request<void>(`/transactions/${id}`, { method: 'DELETE' });
 
+export const deleteExternalUserTransaction = (userId: string, transactionId: string) =>
+  request<void>(`/admin/users/${userId}/transactions/${transactionId}`, { method: 'DELETE' });
+
 export const listExternalGoals = () =>
   request<ExternalGoal[]>('/goals');
 
+export const listExternalUserGoals = (userId: string) =>
+  request<ExternalGoal[]>(`/admin/users/${userId}/goals`);
+
 export const createExternalGoal = (payload: Omit<ExternalGoal, 'id' | 'currentAmount' | 'icon'>) =>
   request<ExternalGoal>('/goals', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const createExternalUserGoal = (userId: string, payload: Omit<ExternalGoal, 'id' | 'currentAmount' | 'icon'>) =>
+  request<ExternalGoal>(`/admin/users/${userId}/goals`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -154,13 +175,27 @@ export const contributeExternalGoal = (id: string, amount: number) =>
     body: JSON.stringify({ amount }),
   });
 
+export const contributeExternalUserGoal = (userId: string, goalId: string, amount: number) =>
+  request<ExternalGoal>(`/admin/users/${userId}/goals/${goalId}/contribute`, {
+    method: 'POST',
+    body: JSON.stringify({ amount }),
+  });
+
 export const resetExternalGoal = (id: string) =>
   request<ExternalGoal>(`/goals/${id}/reset`, {
     method: 'POST',
   });
 
+export const resetExternalUserGoal = (userId: string, goalId: string) =>
+  request<ExternalGoal>(`/admin/users/${userId}/goals/${goalId}/reset`, {
+    method: 'POST',
+  });
+
 export const deleteExternalGoal = (id: string) =>
   request<void>(`/goals/${id}`, { method: 'DELETE' });
+
+export const deleteExternalUserGoal = (userId: string, goalId: string) =>
+  request<void>(`/admin/users/${userId}/goals/${goalId}`, { method: 'DELETE' });
 
 export const getExternalAdminHealth = () =>
   request<ExternalAdminHealth>('/admin/health');

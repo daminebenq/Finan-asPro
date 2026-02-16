@@ -2,9 +2,14 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, ExternalLink, Goal, Plus, RefreshCcw, Trash2 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import {
+  createExternalUserGoal,
+  createExternalUserTransaction,
   contributeExternalGoal,
+  contributeExternalUserGoal,
   createExternalGoal,
   createExternalTransaction,
+  deleteExternalUserGoal,
+  deleteExternalUserTransaction,
   deleteExternalGoal,
   deleteExternalTransaction,
   externalApiBase,
@@ -13,7 +18,10 @@ import {
   getExternalSummary,
   listExternalAdminUsers,
   listExternalGoals,
+  listExternalUserGoals,
+  listExternalUserTransactions,
   listExternalTransactions,
+  resetExternalUserGoal,
   resetExternalGoal,
   resetExternalUserData,
   revokeExternalUserSessions,
@@ -35,6 +43,7 @@ const ExternalPortalAdmin: React.FC = () => {
   const [adminHealth, setAdminHealth] = useState<ExternalAdminHealth | null>(null);
   const [adminUsers, setAdminUsers] = useState<ExternalAdminUser[]>([]);
   const [adminError, setAdminError] = useState<string | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [contribution, setContribution] = useState<Record<string, string>>({});
   const [showGoalForm, setShowGoalForm] = useState(false);
 
@@ -83,7 +92,11 @@ const ExternalPortalAdmin: React.FC = () => {
       }
 
       if (adminUsersResult.status === 'fulfilled') {
-        setAdminUsers(adminUsersResult.value);
+        const users = adminUsersResult.value;
+        setAdminUsers(users);
+        if (!selectedUserId && users.length > 0) {
+          setSelectedUserId(users[0].id);
+        }
       } else {
         setAdminUsers([]);
       }
@@ -94,7 +107,54 @@ const ExternalPortalAdmin: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedUserId]);
+
+  const isUserScope = selectedUserId.trim().length > 0;
+
+  const selectedUser = useMemo(
+    () => adminUsers.find((item) => item.id === selectedUserId) || null,
+    [adminUsers, selectedUserId]
+  );
+
+  const refreshScopedData = useCallback(async () => {
+    if (!isUserScope) {
+      const [remoteSummary, remoteTxs, remoteGoals] = await Promise.all([
+        getExternalSummary(),
+        listExternalTransactions(),
+        listExternalGoals(),
+      ]);
+      setSummary(remoteSummary);
+      setTransactions(remoteTxs || []);
+      setGoals(remoteGoals || []);
+      return;
+    }
+
+    const [remoteTxs, remoteGoals] = await Promise.all([
+      listExternalUserTransactions(selectedUserId),
+      listExternalUserGoals(selectedUserId),
+    ]);
+
+    setTransactions(remoteTxs || []);
+    setGoals(remoteGoals || []);
+
+    if (selectedUser) {
+      setSummary((prev) => ({
+        patrimony: selectedUser.patrimony,
+        income: selectedUser.income,
+        expenses: selectedUser.expenses,
+        invested: selectedUser.invested,
+        balance: selectedUser.balance,
+        recentTransactions: prev?.recentTransactions || [],
+      }));
+    }
+  }, [isUserScope, selectedUserId, selectedUser]);
+
+  useEffect(() => {
+    if (!healthOk) return;
+    refreshScopedData().catch((error) => {
+      toast({ title: 'Falha ao carregar escopo selecionado', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
+    });
+  }, [selectedUserId, selectedUser, healthOk, refreshScopedData]);
 
   useEffect(() => {
     loadExternalData();
@@ -117,13 +177,23 @@ const ExternalPortalAdmin: React.FC = () => {
     }
 
     try {
-      await createExternalTransaction({
-        description: txForm.description,
-        amount,
-        category: txForm.category,
-        date: txForm.date,
-        type: txForm.type,
-      });
+      if (isUserScope) {
+        await createExternalUserTransaction(selectedUserId, {
+          description: txForm.description,
+          amount,
+          category: txForm.category,
+          date: txForm.date,
+          type: txForm.type,
+        });
+      } else {
+        await createExternalTransaction({
+          description: txForm.description,
+          amount,
+          category: txForm.category,
+          date: txForm.date,
+          type: txForm.type,
+        });
+      }
       toast({ title: 'Transação criada no portal 18080' });
       setTxForm({ description: '', amount: '', category: 'Outros', date: new Date().toISOString().slice(0, 10), type: 'expense' });
       await loadExternalData();
@@ -134,7 +204,11 @@ const ExternalPortalAdmin: React.FC = () => {
 
   const handleDeleteTx = async (id: string) => {
     try {
-      await deleteExternalTransaction(id);
+      if (isUserScope) {
+        await deleteExternalUserTransaction(selectedUserId, id);
+      } else {
+        await deleteExternalTransaction(id);
+      }
       toast({ title: 'Transação removida no portal 18080' });
       await loadExternalData();
     } catch (error) {
@@ -152,13 +226,23 @@ const ExternalPortalAdmin: React.FC = () => {
     }
 
     try {
-      await createExternalGoal({
-        name: goalForm.name,
-        targetAmount,
-        monthlyContribution,
-        deadline: goalForm.deadline,
-        category: goalForm.category,
-      });
+      if (isUserScope) {
+        await createExternalUserGoal(selectedUserId, {
+          name: goalForm.name,
+          targetAmount,
+          monthlyContribution,
+          deadline: goalForm.deadline,
+          category: goalForm.category,
+        });
+      } else {
+        await createExternalGoal({
+          name: goalForm.name,
+          targetAmount,
+          monthlyContribution,
+          deadline: goalForm.deadline,
+          category: goalForm.category,
+        });
+      }
       toast({ title: 'Meta criada no portal 18080' });
       setGoalForm({ name: '', targetAmount: '', monthlyContribution: '', deadline: '', category: 'Planejamento' });
       setShowGoalForm(false);
@@ -170,7 +254,11 @@ const ExternalPortalAdmin: React.FC = () => {
 
   const handleDeleteGoal = async (id: string) => {
     try {
-      await deleteExternalGoal(id);
+      if (isUserScope) {
+        await deleteExternalUserGoal(selectedUserId, id);
+      } else {
+        await deleteExternalGoal(id);
+      }
       toast({ title: 'Meta removida no portal 18080' });
       await loadExternalData();
     } catch (error) {
@@ -180,7 +268,11 @@ const ExternalPortalAdmin: React.FC = () => {
 
   const handleResetGoal = async (id: string) => {
     try {
-      await resetExternalGoal(id);
+      if (isUserScope) {
+        await resetExternalUserGoal(selectedUserId, id);
+      } else {
+        await resetExternalGoal(id);
+      }
       toast({ title: 'Meta resetada', description: 'Valor acumulado da meta foi zerado.' });
       await loadExternalData();
     } catch (error) {
@@ -195,7 +287,11 @@ const ExternalPortalAdmin: React.FC = () => {
       return;
     }
     try {
-      await contributeExternalGoal(goalId, amount);
+      if (isUserScope) {
+        await contributeExternalUserGoal(selectedUserId, goalId, amount);
+      } else {
+        await contributeExternalGoal(goalId, amount);
+      }
       setContribution((prev) => ({ ...prev, [goalId]: '' }));
       toast({ title: 'Aporte realizado no portal 18080' });
       await loadExternalData();
@@ -234,6 +330,21 @@ const ExternalPortalAdmin: React.FC = () => {
               Origem API: <span className="font-mono text-xs">{externalApiBase}</span>
             </p>
           </div>
+          <div className="min-w-[280px]">
+            <label className="block text-xs text-gray-500 mb-1">Escopo de gerenciamento</label>
+            <select
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700"
+            >
+              <option value="">Modo convidado/global (sem usuário)</option>
+              {adminUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name} · {user.email}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex items-center gap-2">
             <span className={`px-3 py-1 rounded-full text-xs font-medium ${healthOk ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
               {healthOk ? 'Conectado' : 'Desconectado'}
@@ -246,6 +357,9 @@ const ExternalPortalAdmin: React.FC = () => {
             </a>
           </div>
         </div>
+        <p className="mt-3 text-xs text-gray-500">
+          Escopo ativo: {selectedUserId && selectedUser ? `${selectedUser.name} (${selectedUser.email})` : 'Convidado/Global'}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

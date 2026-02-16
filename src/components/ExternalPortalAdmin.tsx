@@ -5,12 +5,19 @@ import {
   contributeExternalGoal,
   createExternalGoal,
   createExternalTransaction,
+  deleteExternalGoal,
   deleteExternalTransaction,
   externalApiBase,
+  getExternalAdminHealth,
   getExternalHealth,
   getExternalSummary,
+  listExternalAdminUsers,
   listExternalGoals,
   listExternalTransactions,
+  resetExternalUserData,
+  revokeExternalUserSessions,
+  type ExternalAdminHealth,
+  type ExternalAdminUser,
   type ExternalGoal,
   type ExternalSummary,
   type ExternalTransaction,
@@ -24,6 +31,9 @@ const ExternalPortalAdmin: React.FC = () => {
   const [summary, setSummary] = useState<ExternalSummary | null>(null);
   const [transactions, setTransactions] = useState<ExternalTransaction[]>([]);
   const [goals, setGoals] = useState<ExternalGoal[]>([]);
+  const [adminHealth, setAdminHealth] = useState<ExternalAdminHealth | null>(null);
+  const [adminUsers, setAdminUsers] = useState<ExternalAdminUser[]>([]);
+  const [adminError, setAdminError] = useState<string | null>(null);
   const [contribution, setContribution] = useState<Record<string, string>>({});
 
   const [txForm, setTxForm] = useState({
@@ -55,6 +65,26 @@ const ExternalPortalAdmin: React.FC = () => {
       setSummary(remoteSummary);
       setTransactions(remoteTxs || []);
       setGoals(remoteGoals || []);
+
+      const [adminHealthResult, adminUsersResult] = await Promise.allSettled([
+        getExternalAdminHealth(),
+        listExternalAdminUsers(),
+      ]);
+
+      if (adminHealthResult.status === 'fulfilled') {
+        setAdminHealth(adminHealthResult.value);
+        setAdminError(null);
+      } else {
+        setAdminHealth(null);
+        const message = adminHealthResult.reason instanceof Error ? adminHealthResult.reason.message : 'Falha ao carregar admin health';
+        setAdminError(message);
+      }
+
+      if (adminUsersResult.status === 'fulfilled') {
+        setAdminUsers(adminUsersResult.value);
+      } else {
+        setAdminUsers([]);
+      }
     } catch (error) {
       setHealthOk(false);
       const message = error instanceof Error ? error.message : 'Falha ao acessar portal externo';
@@ -128,6 +158,16 @@ const ExternalPortalAdmin: React.FC = () => {
     }
   };
 
+  const handleDeleteGoal = async (id: string) => {
+    try {
+      await deleteExternalGoal(id);
+      toast({ title: 'Meta removida no portal 18080' });
+      loadExternalData();
+    } catch (error) {
+      toast({ title: 'Erro ao remover meta', description: error instanceof Error ? error.message : 'Falha', variant: 'destructive' });
+    }
+  };
+
   const handleContributeGoal = async (goalId: string) => {
     const amount = Number(contribution[goalId] || 0);
     if (!amount || amount <= 0) {
@@ -141,6 +181,26 @@ const ExternalPortalAdmin: React.FC = () => {
       loadExternalData();
     } catch (error) {
       toast({ title: 'Erro ao aportar', description: error instanceof Error ? error.message : 'Falha', variant: 'destructive' });
+    }
+  };
+
+  const handleRevokeSessions = async (userId: string) => {
+    try {
+      const response = await revokeExternalUserSessions(userId);
+      toast({ title: 'Sessões revogadas', description: `${response.revokedSessions || 0} sessão(ões) encerrada(s).` });
+      loadExternalData();
+    } catch (error) {
+      toast({ title: 'Erro ao revogar sessões', description: error instanceof Error ? error.message : 'Falha', variant: 'destructive' });
+    }
+  };
+
+  const handleResetUserData = async (userId: string) => {
+    try {
+      await resetExternalUserData(userId);
+      toast({ title: 'Dados do usuário resetados no portal 18080' });
+      loadExternalData();
+    } catch (error) {
+      toast({ title: 'Erro ao resetar dados', description: error instanceof Error ? error.message : 'Falha', variant: 'destructive' });
     }
   };
 
@@ -260,12 +320,82 @@ const ExternalPortalAdmin: React.FC = () => {
                     <button onClick={() => handleContributeGoal(goal.id)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 inline-flex items-center gap-1">
                       <Activity size={13} /> Aportar
                     </button>
+                    <button onClick={() => handleDeleteGoal(goal.id)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm hover:bg-red-50 text-red-600 inline-flex items-center gap-1">
+                      <Trash2 size={13} /> Excluir
+                    </button>
                   </div>
                 </div>
               );
             })}
             {goals.length === 0 && <p className="text-sm text-gray-400 py-2">Sem metas no momento.</p>}
           </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-100 p-5">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h4 className="font-semibold text-gray-900">Operações administrativas (API 13001)</h4>
+            <p className="text-xs text-gray-500">Utiliza rotas /api/admin/* protegidas por chave admin.</p>
+          </div>
+          {adminError ? (
+            <span className="px-2 py-1 text-xs rounded-full bg-amber-100 text-amber-700">Admin indisponível</span>
+          ) : (
+            <span className="px-2 py-1 text-xs rounded-full bg-emerald-100 text-emerald-700">Admin ativo</span>
+          )}
+        </div>
+
+        {adminHealth && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <div className="border border-gray-100 rounded-lg p-3">
+              <p className="text-xs text-gray-500">Usuários</p>
+              <p className="text-lg font-semibold text-gray-900">{adminHealth.totals.users}</p>
+            </div>
+            <div className="border border-gray-100 rounded-lg p-3">
+              <p className="text-xs text-gray-500">Sessões</p>
+              <p className="text-lg font-semibold text-gray-900">{adminHealth.totals.sessions}</p>
+            </div>
+            <div className="border border-gray-100 rounded-lg p-3">
+              <p className="text-xs text-gray-500">Newsletters</p>
+              <p className="text-lg font-semibold text-gray-900">{adminHealth.totals.newsletterSubscriptions}</p>
+            </div>
+            <div className="border border-gray-100 rounded-lg p-3">
+              <p className="text-xs text-gray-500">Reset tokens</p>
+              <p className="text-lg font-semibold text-gray-900">{adminHealth.totals.resetTokens}</p>
+            </div>
+          </div>
+        )}
+
+        {adminError && (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-3 mb-4">
+            {adminError}
+          </p>
+        )}
+
+        <div className="space-y-2 max-h-72 overflow-auto">
+          {adminUsers.map((u) => (
+            <div key={u.id} className="border border-gray-100 rounded-lg p-3">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{u.name}</p>
+                  <p className="text-xs text-gray-500">{u.email}</p>
+                </div>
+                <span className="text-xs text-gray-500">Sessões ativas: {u.activeSessions}</span>
+              </div>
+              <div className="text-xs text-gray-500 mb-2">
+                Transações: {u.transactionsCount} · Metas: {u.goalsCount} · Patrimônio: {formatBRL(u.patrimony)}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => handleRevokeSessions(u.id)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">
+                  Revogar sessões
+                </button>
+                <button onClick={() => handleResetUserData(u.id)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm hover:bg-red-50 text-red-600">
+                  Resetar dados
+                </button>
+              </div>
+            </div>
+          ))}
+          {!adminError && adminUsers.length === 0 && <p className="text-sm text-gray-400 py-2">Sem usuários cadastrados.</p>}
         </div>
       </div>
 

@@ -34,6 +34,60 @@ export interface ExternalGoal {
   icon?: string;
 }
 
+export interface ExternalAdminUser {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  activeSessions: number;
+  transactionsCount: number;
+  goalsCount: number;
+  educationModulesCount: number;
+  patrimony: number;
+  income: number;
+  expenses: number;
+  invested: number;
+  balance: number;
+}
+
+export interface ExternalAdminHealth {
+  ok: boolean;
+  service: string;
+  generatedAt: string;
+  adminProtected: boolean;
+  totals: {
+    users: number;
+    sessions: number;
+    resetTokens: number;
+    newsletterSubscriptions: number;
+    transactionsCount: number;
+    goalsCount: number;
+    educationModulesCount: number;
+    patrimony: number;
+    income: number;
+    expenses: number;
+    invested: number;
+    balance: number;
+  };
+  users: Array<{
+    user: {
+      id: string;
+      name: string;
+      email: string;
+      createdAt: string;
+    };
+    activeSessions: number;
+    transactionsCount: number;
+    goalsCount: number;
+    educationModulesCount: number;
+    patrimony: number;
+    income: number;
+    expenses: number;
+    invested: number;
+    balance: number;
+  }>;
+}
+
 const getDefaultApiBase = () => {
   const configured = (import.meta.env.VITE_FINBR_EXTERNAL_API_BASE as string | undefined)?.trim();
   if (configured) return configured;
@@ -98,4 +152,23 @@ export const contributeExternalGoal = (id: string, amount: number) =>
   request<ExternalGoal>(`/goals/${id}/contribute`, {
     method: 'POST',
     body: JSON.stringify({ amount }),
+  });
+
+export const deleteExternalGoal = (id: string) =>
+  request<void>(`/goals/${id}`, { method: 'DELETE' });
+
+export const getExternalAdminHealth = () =>
+  request<ExternalAdminHealth>('/admin/health');
+
+export const listExternalAdminUsers = () =>
+  request<ExternalAdminUser[]>('/admin/users');
+
+export const revokeExternalUserSessions = (userId: string) =>
+  request<{ ok: boolean; revokedSessions: number }>(`/admin/users/${userId}/revoke-sessions`, {
+    method: 'POST',
+  });
+
+export const resetExternalUserData = (userId: string) =>
+  request<{ ok: boolean; message: string }>(`/admin/users/${userId}/reset-data`, {
+    method: 'POST',
   });

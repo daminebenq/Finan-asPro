@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext, UserProfile } from '@/contexts/app-context';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/use-toast';
@@ -72,6 +72,7 @@ const AdminPanel: React.FC = () => {
   const [adminNotes, setAdminNotes] = useState('');
   const [backendStatus, setBackendStatus] = useState<'connected' | 'disconnected'>('connected');
   const [backendMessage, setBackendMessage] = useState('');
+  const adminFunctionUnavailableRef = useRef(false);
 
   // Discount code form
   const [codeForm, setCodeForm] = useState({ code: '', description: '', discountType: 'percentage', discountValue: '', maxUses: '', validUntil: '' });
@@ -118,6 +119,13 @@ const AdminPanel: React.FC = () => {
       throw new Error('Sessão inválida para ações administrativas. Faça login novamente.');
     }
 
+    if (fallback && adminFunctionUnavailableRef.current) {
+      const result = await fallback();
+      setBackendStatus('connected');
+      setBackendMessage('');
+      return result;
+    }
+
     try {
       const response = await fetch(`${supabaseUrl}/functions/v1/admin-setup`, {
         method: 'POST',
@@ -134,12 +142,16 @@ const AdminPanel: React.FC = () => {
         throw new Error(payload?.error || payload?.message || `Falha backend (${response.status})`);
       }
 
+      adminFunctionUnavailableRef.current = false;
       setBackendStatus('connected');
       setBackendMessage('');
       return payload as T;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Falha de integração com backend admin.';
       const isRuntimeHeaderFailure = /req\.headers\.get is not a function/i.test(message);
+      if (isRuntimeHeaderFailure) {
+        adminFunctionUnavailableRef.current = true;
+      }
 
       if (fallback && (isRuntimeHeaderFailure || /backend admin indisponível|falha backend|internal server error/i.test(message))) {
         try {

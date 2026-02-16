@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { CheckCircle2, Loader2, RefreshCcw, TriangleAlert, Wrench } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getExternalHealth } from '@/lib/external-finbr-api';
@@ -103,10 +103,6 @@ const SetupAssistant: React.FC = () => {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    runChecks();
-  }, [runChecks]);
-
   const summary = useMemo(() => {
     const critical = checks.filter((item) => item.required);
     const optional = checks.filter((item) => !item.required);
@@ -129,7 +125,7 @@ const SetupAssistant: React.FC = () => {
           </button>
         </div>
         <p className="text-sm text-gray-500">
-          Checklist operacional de componentes críticos (env, integrações e tabelas obrigatórias).
+          Checklist operacional de componentes críticos (env, integrações e tabelas obrigatórias). Clique em Revalidar para executar os testes.
         </p>
         <div className="mt-3 flex gap-2 text-xs">
           <span className="px-2 py-1 rounded-md bg-emerald-100 text-emerald-700">OK: {summary.okCritical}</span>

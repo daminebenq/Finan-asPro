@@ -17,6 +17,11 @@ Create a `.env` file in project root:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `VITE_CPF_SCORE_API_URL` (opcional, para consulta de score CPF)
+- `VITE_CPF_SCORE_API_KEY` (opcional)
+- `VITE_CPF_SCORE_API_CPF_PARAM` (opcional, padrão: `cpf`)
+- `VITE_CPF_SCORE_API_AUTH_HEADER` (opcional, padrão: `x-api-key`)
+- `VITE_CPF_SCORE_API_TIMEOUT_MS` (opcional, padrão: `12000`)
 
 An example is provided in `.env.example`.
 

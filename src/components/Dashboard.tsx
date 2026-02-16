@@ -2,10 +2,20 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '@/contexts/app-context';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/use-toast';
+import BrazilUseCases from './BrazilUseCases';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Plus, Trash2, Edit2, Download, Upload, TrendingUp, TrendingDown,
   DollarSign, Target, PieChart, BarChart3, FileText, BookOpen,
-  ArrowUpRight, ArrowDownRight, Filter, Search, X, Save, ChevronDown
+  ArrowUpRight, ArrowDownRight, Filter, Search, X, Save, ChevronDown,
+  UserCircle2, LogOut, Settings, Shield, Database
 } from 'lucide-react';
 
 const CATEGORIES = [
@@ -36,7 +46,7 @@ interface Goal {
 }
 
 const Dashboard: React.FC = () => {
-  const { profile, user, plans, updateProfile, updatePassword } = useAppContext();
+  const { profile, user, plans, updateProfile, updatePassword, setCurrentPage, signOut } = useAppContext();
   const [activeTab, setActiveTab] = useState('overview');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
@@ -59,6 +69,7 @@ const Dashboard: React.FC = () => {
   const [goalForm, setGoalForm] = useState({ name: '', target_amount: '', current_amount: '0', deadline: '', category: 'geral', priority: 'medium' });
   const [profileForm, setProfileForm] = useState({ full_name: '', cpf: '', phone: '', experience_level: 'beginner' });
   const [passwordForm, setPasswordForm] = useState({ newPassword: '', confirmPassword: '' });
+  const isAdmin = profile?.role === 'admin' || profile?.email?.toLowerCase() === 'damineone@gmail.com';
 
   useEffect(() => {
     if (!profile) return;
@@ -362,6 +373,7 @@ const Dashboard: React.FC = () => {
     { id: 'transactions', label: 'Transações', icon: FileText },
     { id: 'investments', label: 'Investimentos', icon: TrendingUp },
     { id: 'goals', label: 'Metas', icon: Target },
+    { id: 'usecases', label: 'Casos BR', icon: Calculator },
     { id: 'education', label: 'Educação', icon: BookOpen },
   ];
 
@@ -379,14 +391,12 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Top Bar */}
+      {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-            </div>
-            <span className="text-lg font-bold text-gray-900">Fin<span className="text-emerald-600">BR</span></span>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Painel Financeiro</h2>
+            <p className="text-xs text-gray-500">Gestão completa para cenários financeiros brasileiros</p>
           </div>
           <div className="flex items-center gap-4">
             <span className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -402,12 +412,50 @@ const Dashboard: React.FC = () => {
                 Upgrade
               </button>
             )}
-            <button onClick={() => setShowProfileSettings(true)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-all">
-              Editar Perfil
-            </button>
-            <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-              {profile?.full_name?.charAt(0) || 'U'}
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="w-9 h-9 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                  {profile?.full_name?.charAt(0) || 'U'}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>
+                  <div className="leading-tight">
+                    <p className="font-semibold text-sm text-gray-900">{profile?.full_name || 'Usuário'}</p>
+                    <p className="text-xs text-gray-500">{profile?.email}</p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setShowProfileSettings(true)}>
+                  <Settings size={14} className="mr-2" /> Editar perfil
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActiveTab('usecases')}>
+                  <Calculator size={14} className="mr-2" /> Casos financeiros BR
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCurrentPage('dashboard')}>
+                  <UserCircle2 size={14} className="mr-2" /> Ir para Dashboard
+                </DropdownMenuItem>
+                {isAdmin && (
+                  <>
+                    <DropdownMenuItem onClick={() => setCurrentPage('admin')}>
+                      <Shield size={14} className="mr-2" /> Painel Admin
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setCurrentPage('db-studio')}>
+                      <Database size={14} className="mr-2" /> Database Studio
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {profile?.current_plan === 'free' && (
+                  <DropdownMenuItem onClick={() => setShowUpgrade(true)}>
+                    <TrendingUp size={14} className="mr-2" /> Solicitar upgrade
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={signOut} className="text-red-600 focus:text-red-700">
+                  <LogOut size={14} className="mr-2" /> Sair
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
@@ -644,6 +692,10 @@ const Dashboard: React.FC = () => {
             </div>
             {goals.length === 0 && <div className="bg-white rounded-xl border border-gray-100 p-12 text-center"><p className="text-gray-400">Defina metas para acompanhar seu progresso financeiro.</p></div>}
           </div>
+        )}
+
+        {activeTab === 'usecases' && (
+          <BrazilUseCases cpfFromProfile={profile?.cpf || ''} />
         )}
 
         {/* Education Tab */}

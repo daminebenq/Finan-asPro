@@ -17,6 +17,7 @@ Create a `.env` file in project root:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `VITE_FINBR_EXTERNAL_API_BASE` (opcional, padrão sugerido: `http://187.84.150.128:13001/api`)
 - `VITE_CPF_SCORE_API_URL` (opcional, para consulta de score CPF)
 - `VITE_CPF_SCORE_API_KEY` (opcional)
 - `VITE_CPF_SCORE_API_CPF_PARAM` (opcional, padrão: `cpf`)
@@ -129,3 +130,19 @@ Both scripts perform container rebuild/start and a localhost HTTP health check b
 - React + TypeScript + Vite
 - Tailwind + Radix/shadcn UI
 - Supabase Auth, Postgres, Edge Functions
+
+## Admin portal integrado (18080)
+
+Este painel em `:43993` pode atuar como portal administrativo do app em `http://187.84.150.128:18080/` via API backend (`:13001`).
+
+- Aba `Portal 18080` no Admin permite: health check, resumo financeiro, CRUD básico de transações e metas (com aporte).
+- Configure `VITE_FINBR_EXTERNAL_API_BASE` se a API externa estiver em outro host/porta.
+
+## Open APIs sem chave (PF/PJ)
+
+Os cálculos usam fontes públicas sem API key:
+
+- Banco Central SGS (SELIC, IPCA, CDI)
+- BrasilAPI (feriados nacionais)
+
+Os cálculos PF/PJ no dashboard incluem estimativas para INSS, IRRF, FGTS, MEI, Simples Nacional e Lucro Presumido.

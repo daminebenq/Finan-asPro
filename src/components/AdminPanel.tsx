@@ -3,10 +3,11 @@ import { useAppContext, UserProfile } from '@/contexts/app-context';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/use-toast';
 import DatabaseStudio from './DatabaseStudio';
+import ExternalPortalAdmin from './ExternalPortalAdmin';
 import {
   Users, CreditCard, Tag, Megaphone, Search, Check, X, ChevronDown,
   Shield, Eye, Edit2, Loader2, Plus, ToggleLeft, ToggleRight, Clock,
-  BarChart3, TrendingUp, UserPlus, AlertCircle, Database, Layers
+  BarChart3, TrendingUp, UserPlus, AlertCircle, Database, Layers, Link
 } from 'lucide-react';
 
 interface PlanRequest {
@@ -399,6 +400,7 @@ const AdminPanel: React.FC = () => {
     { id: 'requests', label: `Solicitações${pendingRequests.length > 0 ? ` (${pendingRequests.length})` : ''}`, icon: CreditCard },
     { id: 'discounts', label: 'Descontos', icon: Tag },
     { id: 'promotions', label: 'Promoções', icon: Megaphone },
+    { id: 'portal18080', label: 'Portal 18080', icon: Link },
     { id: 'db', label: 'Banco de Dados', icon: Database },
   ];
 
@@ -691,6 +693,11 @@ const AdminPanel: React.FC = () => {
             </div>
             {promotions.length === 0 && <div className="bg-white rounded-xl border border-gray-100 p-12 text-center"><p className="text-gray-400">Nenhuma promoção criada.</p></div>}
           </div>
+        )}
+
+        {/* DB Management Tab */}
+        {activeTab === 'portal18080' && (
+          <ExternalPortalAdmin />
         )}
 
         {/* DB Management Tab */}

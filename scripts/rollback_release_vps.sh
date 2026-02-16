@@ -29,6 +29,17 @@ esac
 cd "\$APP_DIR"
 git fetch --all --tags --prune
 
+ENV_DEPLOY_FILE="\$APP_DIR/.env.deploy"
+if [ -f "\$ENV_DEPLOY_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "\$ENV_DEPLOY_FILE"
+  set +a
+  echo "INFO: Loaded deploy environment from \$ENV_DEPLOY_FILE"
+else
+  echo "WARN: \$ENV_DEPLOY_FILE not found. Build-time VITE variables may be missing."
+fi
+
 if command -v docker-compose >/dev/null 2>&1; then
   COMPOSE_CMD="docker-compose"
 elif docker compose version >/dev/null 2>&1; then

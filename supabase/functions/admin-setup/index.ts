@@ -31,6 +31,36 @@ const json = (status: number, payload: Record<string, unknown>) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
+const readHeader = (req: any, name: string): string | null => {
+  const headers = req?.headers;
+  if (!headers) return null;
+
+  if (typeof headers.get === 'function') {
+    return headers.get(name) ?? headers.get(name.toLowerCase()) ?? null;
+  }
+
+  const direct = headers[name] ?? headers[name.toLowerCase()];
+  if (Array.isArray(direct)) return String(direct[0] ?? '');
+  if (typeof direct === 'string') return direct;
+  return null;
+};
+
+const parseRequestBody = async (req: any): Promise<ActionBody> => {
+  if (typeof req?.json === 'function') {
+    return (await req.json()) as ActionBody;
+  }
+
+  if (req?.body && typeof req.body === 'object') {
+    return req.body as ActionBody;
+  }
+
+  if (typeof req?.body === 'string' && req.body.trim()) {
+    return JSON.parse(req.body) as ActionBody;
+  }
+
+  return {};
+};
+
 const logAdminAction = async (args: {
   actorUserId: string;
   action: string;
@@ -83,10 +113,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const auth = await ensureAdmin(req.headers.get('Authorization'));
+    const auth = await ensureAdmin(readHeader(req, 'Authorization'));
     if (!auth.ok) return json(403, { success: false, error: auth.error });
 
-    const body = (await req.json()) as ActionBody;
+    const body = await parseRequestBody(req);
     const action = String(body.action || '').trim();
 
     switch (action) {

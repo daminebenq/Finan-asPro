@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/use-toast';
 import BrazilUseCases from './BrazilUseCases';
 import ComplianceMatrix from './ComplianceMatrix';
+import TaxLearningCenter from './TaxLearningCenter';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -697,7 +698,10 @@ const Dashboard: React.FC = () => {
         )}
 
         {activeTab === 'usecases' && (
-          <BrazilUseCases cpfFromProfile={profile?.cpf || ''} />
+          <div className="space-y-4">
+            <BrazilUseCases cpfFromProfile={profile?.cpf || ''} />
+            <TaxLearningCenter />
+          </div>
         )}
 
         {activeTab === 'compliance' && (

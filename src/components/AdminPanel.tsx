@@ -46,6 +46,25 @@ interface AdminPlan {
   has_reports: boolean;
 }
 
+const ADMIN_FUNCTION_DOWN_UNTIL_KEY = 'finbr_admin_setup_down_until';
+const ADMIN_FUNCTION_DOWN_TTL_MS = 15 * 60 * 1000;
+
+const isAdminFunctionMarkedDown = () => {
+  if (typeof window === 'undefined') return false;
+  const until = Number(window.localStorage.getItem(ADMIN_FUNCTION_DOWN_UNTIL_KEY) || 0);
+  return Number.isFinite(until) && until > Date.now();
+};
+
+const markAdminFunctionDown = () => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(ADMIN_FUNCTION_DOWN_UNTIL_KEY, String(Date.now() + ADMIN_FUNCTION_DOWN_TTL_MS));
+};
+
+const clearAdminFunctionDown = () => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(ADMIN_FUNCTION_DOWN_UNTIL_KEY);
+};
+
 const AdminPanel: React.FC = () => {
   const { profile, user } = useAppContext();
   const [activeTab, setActiveTab] = useState('overview');
@@ -72,7 +91,7 @@ const AdminPanel: React.FC = () => {
   const [adminNotes, setAdminNotes] = useState('');
   const [backendStatus, setBackendStatus] = useState<'connected' | 'disconnected'>('connected');
   const [backendMessage, setBackendMessage] = useState('');
-  const adminFunctionUnavailableRef = useRef(false);
+  const adminFunctionUnavailableRef = useRef(isAdminFunctionMarkedDown());
 
   // Discount code form
   const [codeForm, setCodeForm] = useState({ code: '', description: '', discountType: 'percentage', discountValue: '', maxUses: '', validUntil: '' });
@@ -143,17 +162,20 @@ const AdminPanel: React.FC = () => {
       }
 
       adminFunctionUnavailableRef.current = false;
+      clearAdminFunctionDown();
       setBackendStatus('connected');
       setBackendMessage('');
       return payload as T;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Falha de integração com backend admin.';
       const isRuntimeHeaderFailure = /req\.headers\.get is not a function/i.test(message);
-      if (isRuntimeHeaderFailure) {
+      const isServerFailure = /internal server error|falha backend\s*\(5\d\d\)/i.test(message);
+      if (isRuntimeHeaderFailure || isServerFailure) {
         adminFunctionUnavailableRef.current = true;
+        markAdminFunctionDown();
       }
 
-      if (fallback && (isRuntimeHeaderFailure || /backend admin indisponível|falha backend|internal server error/i.test(message))) {
+      if (fallback && (isRuntimeHeaderFailure || isServerFailure || /backend admin indisponível|falha backend|internal server error/i.test(message))) {
         try {
           const result = await fallback();
           setBackendStatus('connected');
@@ -174,40 +196,41 @@ const AdminPanel: React.FC = () => {
   const fetchAdminData = useCallback(async () => {
     setLoading(true);
     try {
-      const [usersData, requestsData, codesData, promosData] = await Promise.all([
-        invokeAdmin<{ users: UserProfile[] }>(
-          { action: 'get-all-users' },
-          async () => {
-            const { data, error } = await supabase.from('user_profiles').select('*').order('created_at', { ascending: false });
-            if (error) throw error;
-            return { users: (data || []) as UserProfile[] };
-          }
-        ),
-        invokeAdmin<{ requests: PlanRequest[] }>(
-          { action: 'get-pending-requests' },
-          async () => {
-            const { data, error } = await supabase.from('plan_requests').select('*').order('created_at', { ascending: false });
-            if (error) throw error;
-            return { requests: (data || []) as PlanRequest[] };
-          }
-        ),
-        invokeAdmin<{ codes: DiscountCode[] }>(
-          { action: 'get-discount-codes' },
-          async () => {
-            const { data, error } = await supabase.from('discount_codes').select('*').order('created_at', { ascending: false });
-            if (error) throw error;
-            return { codes: (data || []) as DiscountCode[] };
-          }
-        ),
-        invokeAdmin<{ promotions: Promotion[] }>(
-          { action: 'get-promotions-admin' },
-          async () => {
-            const { data, error } = await supabase.from('promotions').select('*').order('created_at', { ascending: false });
-            if (error) throw error;
-            return { promotions: (data || []) as Promotion[] };
-          }
-        ),
-      ]);
+      const usersData = await invokeAdmin<{ users: UserProfile[] }>(
+        { action: 'get-all-users' },
+        async () => {
+          const { data, error } = await supabase.from('user_profiles').select('*').order('created_at', { ascending: false });
+          if (error) throw error;
+          return { users: (data || []) as UserProfile[] };
+        }
+      );
+
+      const requestsData = await invokeAdmin<{ requests: PlanRequest[] }>(
+        { action: 'get-pending-requests' },
+        async () => {
+          const { data, error } = await supabase.from('plan_requests').select('*').order('created_at', { ascending: false });
+          if (error) throw error;
+          return { requests: (data || []) as PlanRequest[] };
+        }
+      );
+
+      const codesData = await invokeAdmin<{ codes: DiscountCode[] }>(
+        { action: 'get-discount-codes' },
+        async () => {
+          const { data, error } = await supabase.from('discount_codes').select('*').order('created_at', { ascending: false });
+          if (error) throw error;
+          return { codes: (data || []) as DiscountCode[] };
+        }
+      );
+
+      const promosData = await invokeAdmin<{ promotions: Promotion[] }>(
+        { action: 'get-promotions-admin' },
+        async () => {
+          const { data, error } = await supabase.from('promotions').select('*').order('created_at', { ascending: false });
+          if (error) throw error;
+          return { promotions: (data || []) as Promotion[] };
+        }
+      );
       const { data: plansData } = await supabase.from('plans').select('*').order('price_monthly', { ascending: true });
       if (usersData?.users) setUsers(usersData.users);
       if (requestsData?.requests) setRequests(requestsData.requests);

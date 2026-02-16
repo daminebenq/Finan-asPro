@@ -98,6 +98,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return p;
   }, []);
 
+  const ensureOwnerProfilePrivileges = useCallback(async (p: UserProfile): Promise<UserProfile> => {
+    if (!isOwnerEmail(p.email)) return p;
+
+    const needsUpdate =
+      p.role !== 'admin' ||
+      p.current_plan !== 'expert' ||
+      p.plan_status !== 'active' ||
+      p.experience_level !== 'professional';
+
+    if (!needsUpdate) return p;
+
+    const patch = {
+      role: 'admin',
+      current_plan: 'expert',
+      plan_status: 'active',
+      experience_level: 'professional',
+    } as const;
+
+    const { data: updated, error } = await supabase
+      .from('user_profiles')
+      .update(patch)
+      .eq('user_id', p.user_id)
+      .select('*')
+      .maybeSingle();
+
+    if (error) {
+      console.error('Failed to enforce owner privileges:', error.message);
+      return { ...p, ...patch };
+    }
+
+    return (updated as UserProfile) || { ...p, ...patch };
+  }, []);
+
   const resolveAuthorizedPage = useCallback((p: UserProfile) => {
     if (isOwnerEmail(p.email)) return 'admin';
     if (p.plan_status === 'active') return 'dashboard';
@@ -117,7 +150,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (data) {
-      const profileData = applyOwnerAdminFallback(data as UserProfile);
+      const ownerPersisted = await ensureOwnerProfilePrivileges(data as UserProfile);
+      const profileData = applyOwnerAdminFallback(ownerPersisted as UserProfile);
       setProfile(profileData);
       return profileData;
     }
@@ -147,13 +181,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (inserted) {
-      const profileData = applyOwnerAdminFallback(inserted as UserProfile);
+      const ownerPersisted = await ensureOwnerProfilePrivileges(inserted as UserProfile);
+      const profileData = applyOwnerAdminFallback(ownerPersisted as UserProfile);
       setProfile(profileData);
       return profileData;
     }
 
     return null;
-  }, [applyOwnerAdminFallback]);
+  }, [applyOwnerAdminFallback, ensureOwnerProfilePrivileges]);
 
   const fetchPlans = useCallback(async () => {
     const { data, error } = await supabase.from('plans').select('*').order('price_monthly', { ascending: true });

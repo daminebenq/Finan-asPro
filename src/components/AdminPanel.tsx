@@ -70,6 +70,8 @@ const AdminPanel: React.FC = () => {
   const [editRole, setEditRole] = useState<'user' | 'admin'>('user');
   const [editExperience, setEditExperience] = useState<'beginner' | 'intermediate' | 'professional'>('beginner');
   const [adminNotes, setAdminNotes] = useState('');
+  const [backendStatus, setBackendStatus] = useState<'connected' | 'disconnected'>('connected');
+  const [backendMessage, setBackendMessage] = useState('');
 
   // Discount code form
   const [codeForm, setCodeForm] = useState({ code: '', description: '', discountType: 'percentage', discountValue: '', maxUses: '', validUntil: '' });
@@ -103,48 +105,47 @@ const AdminPanel: React.FC = () => {
     has_reports: true,
   });
 
-  const invokeAdmin = useCallback(async <T,>(body: Record<string, any>, fallback: () => Promise<T>): Promise<T> => {
-    try {
-      const { data, error } = await supabase.functions.invoke('admin-setup', { body });
-      if (error) throw error;
-      return data as T;
-    } catch {
-      return fallback();
+  const invokeAdmin = useCallback(async <T,>(body: Record<string, any>, _fallback?: () => Promise<T>): Promise<T> => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Configuração Supabase ausente no frontend.');
     }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      throw new Error('Sessão inválida para ações administrativas. Faça login novamente.');
+    }
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/admin-setup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.success === false) {
+      throw new Error(payload?.error || payload?.message || `Falha backend (${response.status})`);
+    }
+
+    setBackendStatus('connected');
+    setBackendMessage('');
+    return payload as T;
   }, []);
 
   const fetchAdminData = useCallback(async () => {
     setLoading(true);
     try {
       const [usersData, requestsData, codesData, promosData] = await Promise.all([
-        invokeAdmin<{ users: UserProfile[] }>(
-          { action: 'get-all-users' },
-          async () => {
-            const { data } = await supabase.from('user_profiles').select('*').order('created_at', { ascending: false });
-            return { users: (data || []) as UserProfile[] };
-          }
-        ),
-        invokeAdmin<{ requests: PlanRequest[] }>(
-          { action: 'get-pending-requests' },
-          async () => {
-            const { data } = await supabase.from('plan_requests').select('*').order('created_at', { ascending: false });
-            return { requests: (data || []) as PlanRequest[] };
-          }
-        ),
-        invokeAdmin<{ codes: DiscountCode[] }>(
-          { action: 'get-discount-codes' },
-          async () => {
-            const { data } = await supabase.from('discount_codes').select('*').order('created_at', { ascending: false });
-            return { codes: (data || []) as DiscountCode[] };
-          }
-        ),
-        invokeAdmin<{ promotions: Promotion[] }>(
-          { action: 'get-promotions-admin' },
-          async () => {
-            const { data } = await supabase.from('promotions').select('*').order('created_at', { ascending: false });
-            return { promotions: (data || []) as Promotion[] };
-          }
-        ),
+        invokeAdmin<{ users: UserProfile[] }>({ action: 'get-all-users' }),
+        invokeAdmin<{ requests: PlanRequest[] }>({ action: 'get-pending-requests' }),
+        invokeAdmin<{ codes: DiscountCode[] }>({ action: 'get-discount-codes' }),
+        invokeAdmin<{ promotions: Promotion[] }>({ action: 'get-promotions-admin' }),
       ]);
       const { data: plansData } = await supabase.from('plans').select('*').order('price_monthly', { ascending: true });
       if (usersData?.users) setUsers(usersData.users);
@@ -154,6 +155,9 @@ const AdminPanel: React.FC = () => {
       if (plansData) setAdminPlans(plansData as AdminPlan[]);
     } catch (err) {
       console.error(err);
+      setBackendStatus('disconnected');
+      setBackendMessage(err instanceof Error ? err.message : 'Falha de integração com backend admin.');
+      toast({ title: 'Backend admin indisponível', description: err instanceof Error ? err.message : 'Falha de integração.', variant: 'destructive' });
     }
     setLoading(false);
   }, [invokeAdmin]);
@@ -162,19 +166,7 @@ const AdminPanel: React.FC = () => {
 
   const handleApproveRequest = async (requestId: string, approved: boolean) => {
     await invokeAdmin(
-      { action: 'approve-plan', requestId, approved, adminNotes },
-      async () => {
-        const status = approved ? 'approved' : 'rejected';
-        const { data: reqData } = await supabase.from('plan_requests').select('*').eq('id', requestId).single();
-        await supabase.from('plan_requests').update({ status, admin_notes: adminNotes || null }).eq('id', requestId);
-        if (approved && reqData?.user_id && reqData?.requested_plan) {
-          await supabase
-            .from('user_profiles')
-            .update({ current_plan: reqData.requested_plan, plan_status: 'active' })
-            .eq('user_id', reqData.user_id);
-        }
-        return { success: true };
-      }
+      { action: 'approve-plan', requestId, approved, adminNotes }
     );
     toast({ title: approved ? 'Plano aprovado!' : 'Solicitação rejeitada' });
     setAdminNotes('');
@@ -192,16 +184,6 @@ const AdminPanel: React.FC = () => {
         discount: editDiscount ? parseFloat(editDiscount) : undefined,
         role: editRole,
         experienceLevel: editExperience,
-      },
-      async () => {
-        await supabase.from('user_profiles').update({
-          ...(editPlan ? { current_plan: editPlan } : {}),
-          ...(editStatus ? { plan_status: editStatus } : {}),
-          ...(editDiscount ? { discount_percentage: parseFloat(editDiscount) } : {}),
-          ...(editRole ? { role: editRole } : {}),
-          ...(editExperience ? { experience_level: editExperience } : {}),
-        }).eq('user_id', showEditUser.user_id);
-        return { success: true };
       }
     );
     toast({ title: 'Usuário atualizado!' });
@@ -257,8 +239,7 @@ const AdminPanel: React.FC = () => {
     };
 
     const result = await invokeAdmin<{ success: boolean; error?: string }>(
-      payload,
-      async () => ({ success: false, error: 'Ação disponível apenas via função admin-setup.' })
+      payload
     );
 
     if (!result?.success) {
@@ -284,19 +265,6 @@ const AdminPanel: React.FC = () => {
         discountValue: parseFloat(codeForm.discountValue),
         maxUses: codeForm.maxUses ? parseInt(codeForm.maxUses) : -1,
         validUntil: codeForm.validUntil || null
-      },
-      async () => {
-        const { error } = await supabase.from('discount_codes').insert({
-          code: codeForm.code,
-          description: codeForm.description,
-          discount_type: codeForm.discountType,
-          discount_value: parseFloat(codeForm.discountValue),
-          max_uses: codeForm.maxUses ? parseInt(codeForm.maxUses) : -1,
-          valid_until: codeForm.validUntil || null,
-          is_active: true,
-          current_uses: 0,
-        });
-        return { success: !error, error: error?.message };
       }
     );
     if (data?.success) {
@@ -320,19 +288,6 @@ const AdminPanel: React.FC = () => {
         discountValue: parseFloat(promoForm.discountValue),
         startDate: promoForm.startDate || null,
         endDate: promoForm.endDate || null
-      },
-      async () => {
-        const { error } = await supabase.from('promotions').insert({
-          title: promoForm.title,
-          description: promoForm.description,
-          discount_type: promoForm.discountType,
-          discount_value: parseFloat(promoForm.discountValue),
-          start_date: promoForm.startDate || null,
-          end_date: promoForm.endDate || null,
-          is_active: true,
-          applicable_plans: [],
-        });
-        return { success: !error, error: error?.message };
       }
     );
     if (data?.success) {
@@ -345,22 +300,14 @@ const AdminPanel: React.FC = () => {
 
   const toggleCode = async (codeId: string, isActive: boolean) => {
     await invokeAdmin(
-      { action: 'toggle-discount-code', codeId, isActive },
-      async () => {
-        await supabase.from('discount_codes').update({ is_active: isActive }).eq('id', codeId);
-        return { success: true };
-      }
+      { action: 'toggle-discount-code', codeId, isActive }
     );
     fetchAdminData();
   };
 
   const togglePromo = async (promoId: string, isActive: boolean) => {
     await invokeAdmin(
-      { action: 'toggle-promotion', promotionId: promoId, isActive },
-      async () => {
-        await supabase.from('promotions').update({ is_active: isActive }).eq('id', promoId);
-        return { success: true };
-      }
+      { action: 'toggle-promotion', promotionId: promoId, isActive }
     );
     fetchAdminData();
   };
@@ -525,6 +472,13 @@ const AdminPanel: React.FC = () => {
             </button>
           ))}
         </div>
+
+        {backendStatus === 'disconnected' && (
+          <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-4">
+            <p className="text-sm font-medium text-red-700">Integração backend admin indisponível</p>
+            <p className="text-xs text-red-600 mt-1">{backendMessage || 'Verifique deploy da função admin-setup e sessão do usuário admin.'}</p>
+          </div>
+        )}
 
         {/* Overview */}
         {activeTab === 'overview' && (

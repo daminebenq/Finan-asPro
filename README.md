@@ -146,3 +146,15 @@ Os cálculos usam fontes públicas sem API key:
 - BrasilAPI (feriados nacionais)
 
 Os cálculos PF/PJ no dashboard incluem estimativas para INSS, IRRF, FGTS, MEI, Simples Nacional e Lucro Presumido.
+
+## Matriz de conformidade
+
+O dashboard inclui a aba `Conformidade`, com matriz de mapeamento entre:
+
+- calculadora/recurso
+- base de fórmula
+- referência legal/fiscal
+- periodicidade de revisão
+- data de última revisão
+
+Objetivo: governança técnica e auditoria funcional dos cálculos PF/PJ.

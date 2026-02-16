@@ -3,6 +3,7 @@ import { useAppContext } from '@/contexts/app-context';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/use-toast';
 import BrazilUseCases from './BrazilUseCases';
+import ComplianceMatrix from './ComplianceMatrix';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +16,7 @@ import {
   Plus, Trash2, Edit2, Download, Upload, TrendingUp, TrendingDown,
   DollarSign, Target, PieChart, BarChart3, FileText, BookOpen,
   ArrowUpRight, ArrowDownRight, Filter, Search, X, Save, ChevronDown,
-  UserCircle2, LogOut, Settings, Shield, Database, Calculator
+  UserCircle2, LogOut, Settings, Shield, Database, Calculator, Scale
 } from 'lucide-react';
 
 const CATEGORIES = [
@@ -374,6 +375,7 @@ const Dashboard: React.FC = () => {
     { id: 'investments', label: 'Investimentos', icon: TrendingUp },
     { id: 'goals', label: 'Metas', icon: Target },
     { id: 'usecases', label: 'Casos BR', icon: Calculator },
+    { id: 'compliance', label: 'Conformidade', icon: Scale },
     { id: 'education', label: 'Educação', icon: BookOpen },
   ];
 
@@ -696,6 +698,10 @@ const Dashboard: React.FC = () => {
 
         {activeTab === 'usecases' && (
           <BrazilUseCases cpfFromProfile={profile?.cpf || ''} />
+        )}
+
+        {activeTab === 'compliance' && (
+          <ComplianceMatrix />
         )}
 
         {/* Education Tab */}

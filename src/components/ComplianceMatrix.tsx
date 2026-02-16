@@ -114,6 +114,7 @@ const ComplianceMatrix: React.FC = () => {
   const [selectedEntry, setSelectedEntry] = useState(complianceRows[0]?.id || '');
   const [reviewNote, setReviewNote] = useState('');
   const [savingReview, setSavingReview] = useState(false);
+  const [historyRange, setHistoryRange] = useState<'30d' | 'all'>('all');
 
   const isAdmin = profile?.role === 'admin' || profile?.email?.toLowerCase() === 'damineone@gmail.com';
 
@@ -185,6 +186,33 @@ const ComplianceMatrix: React.FC = () => {
 
   const exportPdf = () => {
     window.print();
+  };
+
+  const exportHistoryCsv = (entryId: string, topic: string) => {
+    const allRows = reviewHistoryByEntry[entryId] || [];
+    const rows = allRows.filter((row) => {
+      if (historyRange === 'all') return true;
+      const reviewedAt = new Date(row.reviewed_at).getTime();
+      const minDate = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      return reviewedAt >= minDate;
+    });
+
+    const headers = 'Tema,Revisor,Data/Hora,Observação\n';
+    const body = rows
+      .map((row) =>
+        [topic, row.reviewer_name || 'Admin', new Date(row.reviewed_at).toLocaleString('pt-BR'), row.review_note || '']
+          .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+          .join(',')
+      )
+      .join('\n');
+
+    const blob = new Blob([headers + body], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `compliance_history_${entryId}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const saveReview = async () => {
@@ -296,9 +324,52 @@ const ComplianceMatrix: React.FC = () => {
                         <DrawerDescription>{row.topic}</DrawerDescription>
                       </DrawerHeader>
                       <div className="px-4 pb-2 overflow-y-auto">
-                        {(reviewHistoryByEntry[row.id] || []).length > 0 ? (
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setHistoryRange('30d')}
+                              className={`px-2.5 py-1.5 rounded-md text-xs ${historyRange === '30d' ? 'bg-purple-600 text-white' : 'border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                            >
+                              Últimos 30 dias
+                            </button>
+                            <button
+                              onClick={() => setHistoryRange('all')}
+                              className={`px-2.5 py-1.5 rounded-md text-xs ${historyRange === 'all' ? 'bg-purple-600 text-white' : 'border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                            >
+                              Todas
+                            </button>
+                            <span className="px-2 py-1 rounded-md bg-gray-100 text-gray-600 text-xs">
+                              {(reviewHistoryByEntry[row.id] || []).filter((review) => {
+                                if (historyRange === 'all') return true;
+                                const reviewedAt = new Date(review.reviewed_at).getTime();
+                                const minDate = Date.now() - 30 * 24 * 60 * 60 * 1000;
+                                return reviewedAt >= minDate;
+                              }).length} itens
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => exportHistoryCsv(row.id, row.topic)}
+                            className="px-2.5 py-1.5 border border-gray-200 rounded-md text-xs text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1"
+                          >
+                            <Download size={12} /> CSV
+                          </button>
+                        </div>
+
+                        {(reviewHistoryByEntry[row.id] || []).filter((review) => {
+                          if (historyRange === 'all') return true;
+                          const reviewedAt = new Date(review.reviewed_at).getTime();
+                          const minDate = Date.now() - 30 * 24 * 60 * 60 * 1000;
+                          return reviewedAt >= minDate;
+                        }).length > 0 ? (
                           <div className="space-y-2 pb-4">
-                            {(reviewHistoryByEntry[row.id] || []).map((review) => (
+                            {(reviewHistoryByEntry[row.id] || [])
+                              .filter((review) => {
+                                if (historyRange === 'all') return true;
+                                const reviewedAt = new Date(review.reviewed_at).getTime();
+                                const minDate = Date.now() - 30 * 24 * 60 * 60 * 1000;
+                                return reviewedAt >= minDate;
+                              })
+                              .map((review) => (
                               <div key={review.id} className="border border-gray-100 rounded-lg p-3">
                                 <div className="flex items-center justify-between gap-2 mb-1">
                                   <p className="text-sm font-medium text-gray-900">{review.reviewer_name || 'Admin'}</p>
@@ -309,7 +380,7 @@ const ComplianceMatrix: React.FC = () => {
                             ))}
                           </div>
                         ) : (
-                          <p className="text-sm text-gray-500 pb-4">Nenhuma revisão registrada para esta entrada.</p>
+                          <p className="text-sm text-gray-500 pb-4">Nenhuma revisão registrada para este período.</p>
                         )}
                       </div>
                       <DrawerFooter>

@@ -48,17 +48,28 @@ const DatabaseStudio: React.FC = () => {
   );
 
   const loadProjects = useCallback(async () => {
-    const { data, error } = await supabase
+    const firstTry = await supabase
       .from('subprojects')
       .select('*')
       .order('created_at', { ascending: true });
 
+    let data = firstTry.data;
+    let error = firstTry.error;
+
+    if (error && /created_at/i.test(error.message || '')) {
+      const fallbackTry = await supabase.from('subprojects').select('*');
+      data = fallbackTry.data;
+      error = fallbackTry.error;
+    }
+
     if (error) {
       toast({
         title: 'Subdatabase setup required',
-        description: 'Run database/subdatabase_setup.sql in DatabasePad SQL editor first.',
+        description: `Run database/subdatabase_setup.sql and database/fix_subprojects_api_access.sql in DatabasePad SQL editor. (${error.message})`,
         variant: 'destructive',
       });
+      setProjects([]);
+      setSelectedProjectId('');
       return;
     }
 

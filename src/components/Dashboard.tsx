@@ -380,18 +380,6 @@ const Dashboard: React.FC = () => {
     { id: 'education', label: 'Centro de Aprendizado', icon: BookOpen },
   ];
 
-  const educationalContent = [
-    { level: 'beginner', title: 'O que é Renda Fixa?', desc: 'Entenda CDB, LCI, LCA e Tesouro Direto - os investimentos mais seguros do Brasil.', category: 'Renda Fixa' },
-    { level: 'beginner', title: 'Como fazer um orçamento', desc: 'Método 50-30-20 adaptado à realidade brasileira.', category: 'Orçamento' },
-    { level: 'beginner', title: 'Reserva de Emergência', desc: 'Quanto guardar e onde investir sua reserva de emergência.', category: 'Planejamento' },
-    { level: 'intermediate', title: 'Fundos Imobiliários (FIIs)', desc: 'Como investir em imóveis sem comprar um. Entenda FIIs e seus rendimentos.', category: 'Renda Variável' },
-    { level: 'intermediate', title: 'Imposto de Renda em Investimentos', desc: 'Tabela regressiva, isenções e como declarar seus investimentos.', category: 'Impostos' },
-    { level: 'intermediate', title: 'Diversificação de Carteira', desc: 'Como montar uma carteira equilibrada entre RF e RV.', category: 'Estratégia' },
-    { level: 'professional', title: 'Operações Estruturadas', desc: 'Estratégias com opções, hedge e derivativos no mercado brasileiro.', category: 'Avançado' },
-    { level: 'professional', title: 'PGBL vs VGBL', desc: 'Planejamento previdenciário e otimização fiscal com previdência privada.', category: 'Previdência' },
-    { level: 'professional', title: 'Análise Fundamentalista', desc: 'Indicadores, múltiplos e como avaliar empresas na B3.', category: 'Análise' },
-  ];
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -707,26 +695,11 @@ const Dashboard: React.FC = () => {
 
         {/* Education Tab */}
         {activeTab === 'education' && (
-          <div className="space-y-6">
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Domine o mercado financeiro brasileiro com módulos guiados por nível, vídeos obrigatórios e quiz de validação por item.
+            </p>
             <TaxLearningCenter />
-            {['beginner', 'intermediate', 'professional'].map(level => {
-              const levelLabel = level === 'beginner' ? 'Iniciante' : level === 'intermediate' ? 'Intermediário' : 'Profissional';
-              const content = educationalContent.filter(c => c.level === level);
-              return (
-                <div key={level}>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">{levelLabel}</h3>
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {content.map((item, i) => (
-                      <div key={i} className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md transition-all cursor-pointer">
-                        <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-md text-xs font-medium">{item.category}</span>
-                        <h4 className="font-semibold text-gray-900 mt-3">{item.title}</h4>
-                        <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
           </div>
         )}
       </div>

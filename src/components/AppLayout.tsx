@@ -10,21 +10,53 @@ import { Loader2 } from 'lucide-react';
 const AppLayout: React.FC = () => {
   const { 
     user, profile, isLoading, currentPage, setCurrentPage,
-    setShowAuthModal, setAuthMode
+    setShowAuthModal, setAuthMode, signOut
   } = useAppContext();
 
-  const isAdmin = profile?.role === 'admin' || profile?.email?.toLowerCase() === 'damineone@gmail.com';
+  const isAdmin = profile?.email?.toLowerCase() === 'damineone@gmail.com';
+  const isApproved = isAdmin || profile?.plan_status === 'active';
 
   useEffect(() => {
     if (!user) return;
-    if (currentPage === 'landing') {
+    if (!isApproved) {
+      if (currentPage !== 'pending-approval') {
+        setCurrentPage('pending-approval');
+      }
+      return;
+    }
+    if (currentPage === 'landing' || currentPage === 'pending-approval') {
       setCurrentPage(isAdmin ? 'admin' : 'dashboard');
       return;
     }
     if (!isAdmin && (currentPage === 'admin' || currentPage === 'db-studio')) {
       setCurrentPage('dashboard');
     }
-  }, [user, currentPage, isAdmin, setCurrentPage]);
+  }, [user, currentPage, isAdmin, isApproved, setCurrentPage]);
+
+  const PendingApproval = () => (
+    <div className="min-h-screen bg-gradient-to-br from-[#0f1729] to-[#1a2332] flex items-center justify-center px-4">
+      <div className="max-w-lg w-full bg-white rounded-2xl border border-gray-100 p-8 text-center shadow-xl">
+        <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
+          <svg className="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
+          </svg>
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900">Aguardando aprovação</h2>
+        <p className="text-gray-600 mt-3">
+          Sua conta foi identificada, mas ainda precisa da aprovação manual do administrador para liberar acesso completo ao app.
+        </p>
+        <p className="text-sm text-gray-500 mt-2">
+          Assim que aprovada, faça login novamente para continuar.
+        </p>
+        <button
+          onClick={() => signOut()}
+          className="mt-6 w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
+        >
+          Sair
+        </button>
+      </div>
+    </div>
+  );
 
   if (isLoading) {
     return (
@@ -78,6 +110,7 @@ const AppLayout: React.FC = () => {
     <div className="min-h-screen">
       {user ? (
         <>
+          {currentPage === 'pending-approval' && <PendingApproval />}
           {(currentPage === 'dashboard' || currentPage === 'landing') && <Dashboard />}
           {currentPage === 'admin' && isAdmin && <AdminPanel />}
           {currentPage === 'db-studio' && isAdmin && <DatabaseStudio />}

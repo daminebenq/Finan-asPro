@@ -22,6 +22,9 @@ const admin = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+const OWNER_EMAIL = 'damineone@gmail.com';
+const normalizeEmail = (email?: string | null) => String(email || '').trim().toLowerCase();
+
 const json = (status: number, payload: Record<string, unknown>) =>
   new Response(JSON.stringify(payload), {
     status,
@@ -56,6 +59,10 @@ const ensureAdmin = async (authHeader?: string | null) => {
   const token = authHeader.replace('Bearer ', '').trim();
   const { data: userData, error: userErr } = await admin.auth.getUser(token);
   if (userErr || !userData.user) return { ok: false, error: 'Unauthorized.' };
+
+  if (normalizeEmail(userData.user.email) !== OWNER_EMAIL) {
+    return { ok: false, error: 'Owner admin access required.' };
+  }
 
   const { data: profile, error: profileErr } = await admin
     .from('user_profiles')
@@ -170,7 +177,28 @@ Deno.serve(async (req) => {
         const patch: Record<string, unknown> = {};
         if (body.plan) patch.current_plan = String(body.plan);
         if (body.planStatus) patch.plan_status = String(body.planStatus);
-        if (body.role) patch.role = String(body.role);
+        if (body.role) {
+          const requestedRole = String(body.role);
+          if (requestedRole === 'admin') {
+            const { data: targetProfile, error: profileLookupError } = await admin
+              .from('user_profiles')
+              .select('email')
+              .eq('user_id', userId)
+              .maybeSingle();
+
+            if (profileLookupError || !targetProfile) {
+              return json(404, { success: false, error: 'Target user profile not found.' });
+            }
+
+            if (normalizeEmail(targetProfile.email) !== OWNER_EMAIL) {
+              return json(400, { success: false, error: 'Somente o admin proprietário pode ter papel admin.' });
+            }
+
+            patch.role = 'admin';
+          } else {
+            patch.role = 'user';
+          }
+        }
         if (body.experienceLevel) patch.experience_level = String(body.experienceLevel);
         if (body.discount !== undefined && body.discount !== null) {
           patch.discount_percentage = Number(body.discount);
@@ -197,10 +225,10 @@ Deno.serve(async (req) => {
         const fullName = String(body.fullName || '').trim();
         const cpf = String(body.cpf || '').trim();
         const phone = String(body.phone || '').trim();
-        const role = String(body.role || 'user');
+        const role = normalizeEmail(email) === OWNER_EMAIL ? 'admin' : 'user';
         const experienceLevel = String(body.experienceLevel || 'beginner');
-        const currentPlan = String(body.currentPlan || 'free');
-        const planStatus = String(body.planStatus || 'active');
+        const currentPlan = normalizeEmail(email) === OWNER_EMAIL ? 'expert' : String(body.currentPlan || 'free');
+        const planStatus = normalizeEmail(email) === OWNER_EMAIL ? 'active' : String(body.planStatus || 'active');
         const discount = Number(body.discount ?? 0);
 
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -271,10 +299,10 @@ Deno.serve(async (req) => {
         const fullName = String(body.fullName || '').trim();
         const cpf = String(body.cpf || '').trim();
         const phone = String(body.phone || '').trim();
-        const role = String(body.role || 'user');
+        const role = normalizeEmail(email) === OWNER_EMAIL ? 'admin' : 'user';
         const experienceLevel = String(body.experienceLevel || 'beginner');
-        const currentPlan = String(body.currentPlan || 'free');
-        const planStatus = String(body.planStatus || 'pending');
+        const currentPlan = normalizeEmail(email) === OWNER_EMAIL ? 'expert' : String(body.currentPlan || 'free');
+        const planStatus = normalizeEmail(email) === OWNER_EMAIL ? 'active' : String(body.planStatus || 'pending');
         const discount = Number(body.discount ?? 0);
 
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {

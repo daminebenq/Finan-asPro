@@ -197,6 +197,12 @@ const AuthModal: React.FC = () => {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {authMode === 'signup' && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                  Novos cadastros passam por aprovação manual do administrador antes do acesso completo.
+                </div>
+              )}
+
+              {authMode === 'signup' && (
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo *</label>

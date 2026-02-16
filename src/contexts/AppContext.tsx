@@ -20,6 +20,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const normalizeEmail = (email: string) => email.trim().toLowerCase();
   const OWNER_EMAIL = 'damineone@gmail.com';
+  const isOwnerEmail = (email?: string | null) => normalizeEmail(email || '') === OWNER_EMAIL;
 
   const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -91,10 +92,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const applyOwnerAdminFallback = useCallback((p: UserProfile | null): UserProfile | null => {
     if (!p) return null;
-    if (normalizeEmail(p.email) === OWNER_EMAIL && p.role !== 'admin') {
+    if (isOwnerEmail(p.email) && p.role !== 'admin') {
       return { ...p, role: 'admin' };
     }
     return p;
+  }, []);
+
+  const resolveAuthorizedPage = useCallback((p: UserProfile) => {
+    if (isOwnerEmail(p.email)) return 'admin';
+    if (p.plan_status === 'active') return 'dashboard';
+    return 'pending-approval';
   }, []);
 
   const fetchProfile = useCallback(async (userId: string, userEmail?: string) => {
@@ -125,7 +132,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       role: normalizedEmail === OWNER_EMAIL ? 'admin' : 'user',
       experience_level: 'beginner',
       current_plan: normalizedEmail === OWNER_EMAIL ? 'expert' : 'free',
-      plan_status: 'active',
+      plan_status: normalizedEmail === OWNER_EMAIL ? 'active' : 'pending',
     };
 
     const { data: inserted, error: insertError } = await supabase
@@ -227,7 +234,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
           const p = await fetchProfile(session.user.id, session.user.email || undefined);
           if (p) {
-            setCurrentPage(p.role === 'admin' ? 'admin' : 'dashboard');
+            setCurrentPage(resolveAuthorizedPage(p));
           }
         }
       } catch (err) {
@@ -249,7 +256,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setUser(session.user);
           const p = await fetchProfile(session.user.id, session.user.email || undefined);
           if (p) {
-            setCurrentPage(p.role === 'admin' ? 'admin' : 'dashboard');
+            setCurrentPage(resolveAuthorizedPage(p));
           }
         } catch (err) {
           console.error('Failed to handle SIGNED_IN state:', err);
@@ -275,7 +282,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       clearSessionTimer();
       subscription.unsubscribe();
     };
-  }, [fetchProfile, fetchPlans, handleSessionExpired, scheduleSessionTimeout]);
+  }, [fetchProfile, fetchPlans, handleSessionExpired, scheduleSessionTimeout, resolveAuthorizedPage]);
 
   const signUp = async (email: string, password: string, fullName: string, cpf: string, phone: string, experienceLevel: string): Promise<boolean> => {
     try {
@@ -286,7 +293,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return false;
       }
       if (data.user) {
-        const isAdmin = normalizedEmail === 'damineone@gmail.com';
+        const isAdmin = normalizedEmail === OWNER_EMAIL;
         const { error: profileError } = await supabase.from('user_profiles').insert({
           user_id: data.user.id,
           email: normalizedEmail,
@@ -296,13 +303,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           role: isAdmin ? 'admin' : 'user',
           experience_level: experienceLevel,
           current_plan: isAdmin ? 'expert' : 'free',
-          plan_status: 'active'
+          plan_status: isAdmin ? 'active' : 'pending'
         });
         if (profileError) {
           toast({ title: 'Erro ao criar perfil', description: profileError.message, variant: 'destructive' });
           return false;
         }
-        toast({ title: 'Conta criada com sucesso!', description: 'Bem-vindo ao FinBR!' });
+        if (isAdmin) {
+          toast({ title: 'Conta admin criada com sucesso!', description: 'Bem-vindo ao painel administrativo.' });
+        } else {
+          toast({ title: 'Cadastro enviado', description: 'Sua conta está pendente de aprovação do administrador.' });
+        }
         setShowAuthModal(false);
         return true;
       }
